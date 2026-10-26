@@ -72,6 +72,7 @@
 docs/HISTORY.md          журнал проекта: решения, проблемы, уроки
 docs/brand.md            палитра и шрифты бренда для роликов
 docs/character-rita.md   описание персонажа (вместо фото)
+docs/rita-generation.md  как получить иллюстрацию Риты в генераторе
 docs/intro-01-plan.md    план первого ролика
 characters/rita/         SVG персонажа по слоям
 videos/<ролик>/          сцены и таймлайн ролика
