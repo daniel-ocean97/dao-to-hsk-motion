@@ -1,0 +1,25 @@
+# Render output: frames and finished videos are rebuilt from code
+out/
+
+# Private reference photos: personal data, never committed
+refs/private/
+
+# Python
+__pycache__/
+*.py[oc]
+.venv
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Claude Code personal settings
+.claude/settings.local.json
+.claude/launch.json

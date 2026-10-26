@@ -1,0 +1,9 @@
+# Same line endings on every device (Windows, macOS)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.mp3 binary
+*.wav binary
+*.mp4 binary
+*.woff2 binary
