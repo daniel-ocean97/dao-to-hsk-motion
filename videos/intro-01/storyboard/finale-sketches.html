@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>intro-01 — эскизы финала</title>
+<style>
+  :root {
+    --paper: #f5f2ec; --paper-2: #ece6dc; --ink: #141414; --ink-2: #3e3a36;
+    --ink-muted: #6b6660; --line: #d6d0c6; --wine: #7b1e2b; --wine-soft: #f3e3e5;
+  }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--paper-2); color: var(--ink);
+         font: 16px/1.5 Onest, "Segoe UI", sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; }
+  h1 { font: 600 32px/1.2 "Cormorant Garamond", Georgia, serif; margin: 0 0 4px; }
+  p.lead { color: var(--ink-muted); margin: 0 0 24px; }
+  figure { margin: 0 0 40px; }
+  svg.frame { display: block; width: 100%; height: auto; box-shadow: 0 2px 12px rgba(0,0,0,.12); }
+  figcaption { margin-top: 10px; }
+  figcaption b { font-size: 18px; }
+  .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 6px; color: var(--ink-2); }
+  .pc ul { margin: 0; padding-left: 20px; }
+  @media (max-width: 700px) { .pc { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>intro-01 · эскизы финала (сцены 6–7)</h1>
+  <p class="lead">Статичные эскизы последнего кадра, 16:9. Это не финальная графика: цель — сравнить
+    композицию, свет и место для 道. Шрифты — системная замена Noto Serif SC / Cormorant Garamond.</p>
+  <div id="frames"></div>
+</main>
+
+<script>
+// Deterministic sketch generator: no Math.random, every shape is a function of fixed params.
+const C = {
+  paper: '#f5f2ec', paper2: '#ece6dc', ink: '#141414', ink2: '#3e3a36', muted: '#6b6660',
+  line: '#d6d0c6', wine: '#7b1e2b', wineStrong: '#5e1520', wineSoft: '#f3e3e5',
+  ochre: '#d9b98a', hair: '#3a2820', skin: '#ecd9c9', linen: '#e6ddd0'
+};
+
+const defs = `
+<defs>
+  <filter id="inkEdge" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="7"/>
+  </filter>
+  <filter id="wash" x="-10%" y="-10%" width="120%" height="120%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="3" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="18" result="d"/>
+    <feGaussianBlur in="d" stdDeviation="2.5"/>
+  </filter>
+  <filter id="dof" x="-5%" y="-5%" width="110%" height="110%"><feGaussianBlur stdDeviation="7"/></filter>
+  <filter id="paperTex" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="11"/>
+    <feColorMatrix values="0 0 0 0 0.35  0 0 0 0 0.3  0 0 0 0 0.25  0 0 0 0.09 0"/>
+  </filter>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${C.paper2}"/>
+    <stop offset=".55" stop-color="${C.paper}"/>
+    <stop offset=".82" stop-color="${C.wineSoft}"/>
+    <stop offset="1" stop-color="#ead2c2"/>
+  </linearGradient>
+  <radialGradient id="sunGlow">
+    <stop offset="0" stop-color="#e9c9a8" stop-opacity=".95"/>
+    <stop offset=".35" stop-color="${C.wineSoft}" stop-opacity=".7"/>
+    <stop offset="1" stop-color="${C.wineSoft}" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#e3d6cf"/><stop offset="1" stop-color="#cfc8c0"/>
+  </linearGradient>
+  <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="${C.paper}" stop-opacity="0"/>
+    <stop offset=".6" stop-color="${C.paper}" stop-opacity=".85"/>
+    <stop offset="1" stop-color="${C.paper}" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="dressBack" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#8d8379"/><stop offset=".75" stop-color="#a69c90"/>
+    <stop offset="1" stop-color="#d9c3b4"/>
+  </linearGradient>
+  <linearGradient id="faceLight" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#f6e6d6" stop-opacity="0"/>
+    <stop offset=".55" stop-color="#b89a88" stop-opacity="0"/>
+    <stop offset="1" stop-color="#9c7f70" stop-opacity=".45"/>
+  </linearGradient>
+  <radialGradient id="sideGlow" cx="0" cy=".55" r=".8">
+    <stop offset="0" stop-color="#efd2b0" stop-opacity=".95"/>
+    <stop offset=".5" stop-color="${C.wineSoft}" stop-opacity=".5"/>
+    <stop offset="1" stop-color="${C.wineSoft}" stop-opacity="0"/>
+  </radialGradient>
+</defs>`;
+
+// Ridge line built from sums of |sin| for sharp ink-painting peaks.
+function ridge(y0, amp, ph, freq, bottom = 1080) {
+  let d = `M -20 ${bottom} L -20 ${y0}`;
+  for (let x = -20; x <= 1940; x += 20) {
+    const h = Math.abs(Math.sin(x * freq + ph)) * 0.65 + Math.abs(Math.sin(x * freq * 2.3 + ph * 1.7)) * 0.35;
+    d += ` L ${x} ${(y0 - amp * Math.pow(h, 1.6)).toFixed(1)}`;
+  }
+  return d + ` L 1940 ${bottom} Z`;
+}
+
+function landscape({ sun = true, sunX = 960, sunY = 640, horizon = 700, blur = false }) {
+  const f = blur ? ' filter="url(#dof)"' : '';
+  let s = `<rect width="1920" height="1080" fill="url(#sky)"/>`;
+  if (sun) {
+    s += `<circle cx="${sunX}" cy="${sunY}" r="420" fill="url(#sunGlow)"/>`;
+    s += `<circle cx="${sunX}" cy="${sunY}" r="74" fill="${C.wine}" opacity=".88" filter="url(#wash)"/>`;
+  }
+  s += `<g${f}>`;
+  s += `<path d="${ridge(horizon - 30, 170, 0.6, 0.0042, horizon + 10)}" fill="${C.line}" opacity=".8" filter="url(#wash)"/>`;
+  s += `<rect x="0" y="${horizon - 160}" width="1920" height="200" fill="url(#mist)"/>`;
+  s += `<path d="${ridge(horizon + 5, 120, 2.1, 0.0061, horizon + 20)}" fill="${C.muted}" opacity=".5" filter="url(#wash)"/>`;
+  s += `<rect x="0" y="${horizon}" width="1920" height="${1080 - horizon}" fill="url(#water)"/>`;
+  if (sun) {
+    for (let i = 0; i < 7; i++) {
+      const w = 150 - i * 18, y = horizon + 18 + i * 22;
+      s += `<rect x="${sunX - w / 2 + (i % 2) * 14}" y="${y}" width="${w}" height="4" rx="2" fill="${C.wine}" opacity="${0.45 - i * 0.05}"/>`;
+    }
+  }
+  s += `<path d="${ridge(horizon + 120, 110, 4.0, 0.0035)}" fill="${C.ink2}" opacity=".35" filter="url(#wash)"/>`;
+  s += `</g>`;
+  return s;
+}
+
+// Pine branch reaching in from the top-left corner: foreground layer for parallax.
+function pine(x, y, sc, blur) {
+  const f = blur ? 'url(#dof)' : 'url(#inkEdge)';
+  let s = `<g transform="translate(${x} ${y}) scale(${sc})" filter="${f}">`;
+  s += `<path d="M -40 -20 C 80 30 180 60 330 70" stroke="${C.ink}" stroke-width="16" fill="none" stroke-linecap="round"/>`;
+  s += `<path d="M 160 50 C 200 100 230 120 280 140" stroke="${C.ink}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+  const tufts = [[120, 40], [220, 64], [320, 70], [280, 140], [60, 10]];
+  for (const [tx, ty] of tufts) {
+    for (let k = -4; k <= 4; k++) {
+      const a = k * 0.28 + 1.4;
+      s += `<path d="M ${tx} ${ty} l ${(Math.cos(a) * 55).toFixed(1)} ${(Math.sin(a) * 38).toFixed(1)}" stroke="#2c3a30" stroke-width="3" opacity=".8"/>`;
+    }
+  }
+  return s + `</g>`;
+}
+
+function rock(x, y, w) {
+  return `<path d="M ${x - w / 2} 1080 L ${x - w / 2} ${y + 30} C ${x - w / 3} ${y - 6} ${x - w / 8} ${y + 4} ${x} ${y - 8}
+    C ${x + w / 6} ${y - 18} ${x + w / 3} ${y + 6} ${x + w / 2} ${y + 40} L ${x + w / 2} 1080 Z"
+    fill="${C.ink}" filter="url(#inkEdge)"/>
+    <path d="M ${x - w / 2.4} ${y + 60} C ${x - w / 5} ${y + 40} ${x} ${y + 70} ${x + w / 4} ${y + 50}" stroke="${C.ink2}" stroke-width="5" fill="none" opacity=".7"/>`;
+}
+
+// Rita seen from behind, origin at feet. headTurn=true shows a profile over the shoulder.
+// Wind blows right-to-left, so hair, hem and belt ends drift to negative x.
+function ritaBack(x, y, sc, headTurn = false) {
+  let s = `<g transform="translate(${x} ${y}) scale(${sc})">`;
+  // dress, backlit: darker body with a warm rim on the sun side
+  s += `<path d="M -36 -330 C -60 -200 -112 -80 -128 -12 Q -40 6 60 -6 C 76 -90 56 -220 36 -330 Z" fill="url(#dressBack)" filter="url(#inkEdge)"/>`;
+  s += `<path d="M -128 -12 Q -40 6 60 -6" stroke="${C.ink2}" stroke-width="2" fill="none"/>`;
+  // vine embroidery along the hem
+  s += `<path d="M -118 -26 C -80 -40 -40 -14 0 -26 S 50 -16 56 -24" stroke="${C.ink}" stroke-width="1.6" fill="none"/>`;
+  for (let i = 0; i < 7; i++) {
+    const lx = -105 + i * 24, ly = -26 - (i % 2) * 8;
+    s += `<ellipse cx="${lx}" cy="${ly}" rx="5" ry="2.4" transform="rotate(${i % 2 ? -30 : 30} ${lx} ${ly})" fill="${C.ink}"/>`;
+  }
+  // torso and arms
+  s += `<path d="M -36 -330 C -42 -380 -52 -430 -48 -458 Q 0 -472 48 -458 C 52 -430 42 -380 36 -330 Z" fill="#978d82"/>`;
+  s += `<path d="M -48 -452 C -58 -400 -62 -340 -60 -292" stroke="#918679" stroke-width="17" fill="none" stroke-linecap="round"/>`;
+  s += `<path d="M 48 -452 C 58 -400 62 -340 62 -292" stroke="#a89d91" stroke-width="17" fill="none" stroke-linecap="round"/>`;
+  s += `<circle cx="-60" cy="-284" r="8" fill="#c9ab98"/><circle cx="62" cy="-284" r="8" fill="#dcbca8"/>`;
+  // wine belt with ends flying left
+  s += `<rect x="-39" y="-340" width="78" height="17" rx="3" fill="${C.wine}"/>`;
+  s += `<path d="M -30 -332 C -70 -330 -100 -300 -160 -306" stroke="${C.wine}" stroke-width="9" fill="none" stroke-linecap="round" filter="url(#inkEdge)"/>`;
+  s += `<path d="M -26 -328 C -60 -310 -96 -284 -138 -268" stroke="${C.wineStrong}" stroke-width="7" fill="none" stroke-linecap="round" filter="url(#inkEdge)"/>`;
+  // neck and head
+  s += `<rect x="-11" y="-492" width="22" height="40" fill="#c9ab98"/>`;
+  s += `<ellipse cx="0" cy="-522" rx="29" ry="36" fill="${C.hair}"/>`;
+  if (headTurn) {
+    // profile edge on the left, lit warm from the sun ahead of her
+    s += `<path d="M -16 -556 C -30 -548 -34 -536 -36 -524 L -44 -512 L -36 -507 C -38 -500 -36 -494 -34 -490
+      C -30 -483 -22 -480 -12 -484 L -6 -500 L -10 -540 Z" fill="${C.skin}"/>`;
+    s += `<path d="M -36 -524 L -44 -512 L -36 -507 M -36 -498 l 4 0" stroke="#b98f7c" stroke-width="1.5" fill="none"/>`;
+    s += `<circle cx="-28" cy="-522" r="2" fill="#7f97a3"/>`;
+  }
+  // long straight hair to the waist, streaming left in strands
+  s += `<path d="M -26 -548 C ${headTurn ? -14 : -38} -505 -46 -462 -54 -420 C -72 -382 -98 -352 -128 -324
+    L -96 -318 C -60 -330 -20 -326 22 -336 C 36 -380 38 -430 32 -470 C 34 -512 30 -546 2 -559 C -10 -560 -20 -556 -26 -548 Z"
+    fill="${C.hair}" filter="url(#inkEdge)"/>`;
+  const strands = [[-40, -430, -150, -360], [-30, -400, -170, -330], [-10, -380, -140, -300], [10, -360, -110, -322], [-50, -460, -120, -404]];
+  for (const [ax, ay, bx, by] of strands) {
+    s += `<path d="M ${ax} ${ay} C ${ax - 20} ${ay + 30} ${(ax + bx) / 2} ${by - 10} ${bx} ${by}" stroke="${C.hair}" stroke-width="5" fill="none" stroke-linecap="round" opacity=".85" filter="url(#inkEdge)"/>`;
+  }
+  s += `<path d="M 26 -470 C 30 -420 30 -380 22 -340" stroke="#d9b9a0" stroke-width="2" fill="none" opacity=".7"/>`;
+  return s + `</g>`;
+}
+
+// Rita facing the viewer, waist-up. Origin = face centre. Light from the left (sun off-frame).
+function ritaFront(x, y, sc) {
+  let s = `<g transform="translate(${x} ${y}) scale(${sc})">`;
+  // hair mass behind shoulders, pushed left by the wind
+  s += `<path d="M -10 -126 C -120 -120 -150 0 -170 160 C -200 330 -260 520 -330 700 L 230 700 C 200 520 170 330 140 160 C 125 0 100 -120 -10 -126 Z" fill="${C.hair}" filter="url(#inkEdge)"/>`;
+  // shoulders and linen dress
+  s += `<path d="M -40 130 C -60 170 -170 190 -230 230 C -280 270 -300 500 -310 700 L 300 700 C 290 500 270 270 220 230 C 160 190 60 170 40 130 Z" fill="${C.linen}" filter="url(#inkEdge)"/>`;
+  s += `<path d="M -230 230 C -280 270 -300 500 -310 700 L -180 700 C -190 500 -190 300 -150 220 Z" fill="#f2e4d2" opacity=".7"/>`;
+  s += `<path d="M -70 175 Q 0 235 70 175" stroke="${C.ink2}" stroke-width="2.5" fill="none"/>`;
+  s += `<path d="M -80 190 C -50 210 -30 240 0 238 C 30 240 50 210 80 190" stroke="${C.ink}" stroke-width="1.5" fill="none"/>`;
+  for (let i = 0; i < 6; i++) {
+    const lx = -66 + i * 26, ly = 206 + Math.abs(i - 2.5) * -6 + 18;
+    s += `<ellipse cx="${lx}" cy="${ly}" rx="6" ry="2.6" transform="rotate(${i % 2 ? -35 : 35} ${lx} ${ly})" fill="${C.ink}"/>`;
+  }
+  // neck
+  s += `<path d="M -32 70 L -36 160 Q 0 182 36 160 L 32 70 Z" fill="${C.skin}"/>`;
+  s += `<path d="M 6 80 L 34 150 L 32 70 Z" fill="#c9ab98" opacity=".6"/>`;
+  // face: oval with cheekbones
+  s += `<path d="M 0 -112 C 55 -112 86 -70 86 -18 C 86 28 74 58 50 86 C 30 106 12 114 0 114 C -12 114 -30 106 -50 86 C -74 58 -86 28 -86 -18 C -86 -70 -55 -112 0 -112 Z" fill="${C.skin}"/>`;
+  s += `<path d="M 0 -112 C 55 -112 86 -70 86 -18 C 86 28 74 58 50 86 C 30 106 12 114 0 114 C -12 114 -30 106 -50 86 C -74 58 -86 28 -86 -18 C -86 -70 -55 -112 0 -112 Z" fill="url(#faceLight)"/>`;
+  s += `<ellipse cx="-48" cy="30" rx="20" ry="11" fill="${C.wineSoft}" opacity=".9"/><ellipse cx="48" cy="30" rx="20" ry="11" fill="${C.wineSoft}" opacity=".6"/>`;
+  // eyes: grey-blue, gaze slightly to the light
+  for (const ex of [-36, 36]) {
+    s += `<path d="M ${ex - 20} -4 Q ${ex} -18 ${ex + 20} -4 Q ${ex} 6 ${ex - 20} -4 Z" fill="#f7efe6"/>`;
+    s += `<circle cx="${ex - 4}" cy="-5" r="8.5" fill="#8ea4b0"/><circle cx="${ex - 4}" cy="-5" r="3.6" fill="${C.ink}"/>`;
+    s += `<path d="M ${ex - 21} -4 Q ${ex} -19 ${ex + 21} -5" stroke="${C.ink}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
+    s += `<path d="M ${ex - 22} -32 Q ${ex} -42 ${ex + 22} -34" stroke="#4a3528" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+  }
+  // nose, mouth (soft half-smile), freckles
+  s += `<path d="M -3 -6 C -5 14 -10 30 -8 40 Q 0 46 10 40" stroke="#a9826f" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+  s += `<path d="M -26 66 Q -4 76 24 63" stroke="#a5706b" stroke-width="3.2" fill="none" stroke-linecap="round"/>`;
+  s += `<path d="M -18 70 Q 0 82 18 68" stroke="#c6908a" stroke-width="3" fill="none" opacity=".6"/>`;
+  const fr = [[-30, 18], [-22, 24], [-40, 22], [24, 18], [32, 24], [18, 26], [-8, 20], [8, 20]];
+  for (const [fx, fy] of fr) s += `<circle cx="${fx}" cy="${fy}" r="1.8" fill="#9a6a50" opacity=".45"/>`;
+  // front hair: centre part, two straight panels over the shoulders, blown left
+  s += `<path d="M 0 -126 C -60 -126 -96 -80 -98 -10 C -100 80 -110 200 -150 330 C -170 400 -200 470 -240 520
+    L -170 500 C -130 400 -100 300 -86 180 C -78 100 -80 0 -70 -60 C -55 -96 -24 -110 0 -112 Z" fill="${C.hair}" filter="url(#inkEdge)"/>`;
+  s += `<path d="M 0 -126 C 60 -126 96 -80 98 -10 C 100 80 104 200 96 330 C 92 400 80 460 60 520
+    L 110 500 C 130 400 140 300 128 180 C 120 100 112 0 88 -70 C 70 -100 30 -112 0 -112 Z" fill="${C.hair}" filter="url(#inkEdge)"/>`;
+  s += `<path d="M 0 -126 L 0 -108" stroke="#7a6052" stroke-width="2"/>`;
+  s += `<path d="M -98 -10 C -100 80 -110 200 -150 330" stroke="#c99a74" stroke-width="2.5" fill="none" opacity=".7"/>`;
+  return s + `</g>`;
+}
+
+function caption({ x, y, size = 250, anchor = 'middle', color = C.ink, sub = true }) {
+  let s = `<g filter="url(#inkEdge)"><text x="${x}" y="${y}" text-anchor="${anchor}" font-size="${size}"
+    font-family="'Noto Serif SC','Songti SC','SimSun','Microsoft YaHei',serif" font-weight="600" fill="${color}">道</text></g>`;
+  if (sub) {
+    s += `<text x="${x}" y="${y + size * 0.36}" text-anchor="${anchor}" font-size="${size * 0.24}"
+      font-family="'Cormorant Garamond',Georgia,serif" font-style="italic" fill="${C.ink2}">dào</text>`;
+    s += `<text x="${x}" y="${y + size * 0.66}" text-anchor="${anchor}" font-size="${size * 0.26}" letter-spacing="4"
+      font-family="'Cormorant Garamond',Georgia,serif" font-weight="600" fill="${C.ink}">Dao to HSK</text>`;
+  }
+  return s;
+}
+
+const paper = `<rect width="1920" height="1080" filter="url(#paperTex)" opacity=".9"/>`;
+
+const frames = [
+  {
+    title: 'A · Спиной к зрителю, рассвет впереди (запасной)',
+    svg: landscape({ sunX: 900, sunY: 585 }) + caption({ x: 900, y: 330, size: 210 }) +
+      rock(1420, 965, 520) + ritaBack(1420, 972, 1.05) + pine(-40, -10, 1.3, false) + paper,
+    pro: ['Зритель смотрит туда же, куда она: «путь впереди» — прямо мысль 道',
+          'Главная черта Риты — длинные волосы на ветру — видна целиком',
+          'Солнце, 道 и Рита не спорят: глаз идёт Рита → солнце → знак',
+          'Нет главного риска проекта — лица в коде — в самом важном кадре',
+          'После интро урок начинается с настоящей Риты лицом к камере: передача «от образа к человеку»'],
+    con: ['Нет зрительного контакта: меньше тепла и «знакомства» с преподавателем',
+          'Силуэт на просвет может стать безликим пятном — нужен тёплый контур (rim) по краю']
+  },
+  {
+    title: 'B · Лицом к зрителю, тёплый свет на лице',
+    svg: landscape({ sun: false, horizon: 760, blur: true }) +
+      `<rect width="1920" height="1080" fill="url(#sideGlow)"/>` +
+      caption({ x: 520, y: 470, size: 250 }) + ritaFront(1300, 400, 1.15) + paper,
+    pro: ['Прямой контакт и тепло: «я ваш преподаватель»',
+          'Лицо узнаётся — сильнее связь образа с Ритой'],
+    con: ['Чтобы свет падал на лицо, солнце должно быть за камерой: восхода в кадре нет, теряется образ рассвета',
+          'Если солнце оставить за ней — лицо в тени, получается тот же силуэт, только хуже читается',
+          'Лицо и 道 спорят за внимание; взгляд в камеру делает кадр статичным портретом',
+          'Фронтальное лицо — самая рискованная часть рисования кодом, и оно в главном кадре'],
+  },
+  {
+    title: 'C · Спиной, поворот головы через плечо — ВЫБРАН владельцем',
+    svg: landscape({ sunX: 820, sunY: 585 }) + caption({ x: 820, y: 320, size: 200 }) +
+      ritaBack(1420, 1235, 1.6, true) + paper,
+    pro: ['Всё сильное из A плюс короткий «привет» зрителю профилем',
+          'Профиль на просвет проще фронтального лица и читается в силуэте'],
+    con: ['Поворот головы — ещё одна анимация и риск «кукольности»',
+          'Внимание делится между профилем и 道 — решено порядком: сначала дописывается 道, потом поворот'],
+  }
+];
+
+const host = document.getElementById('frames');
+for (const f of frames) {
+  const fig = document.createElement('figure');
+  fig.innerHTML = `<svg class="frame" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">${defs}${f.svg}</svg>
+    <figcaption><b>${f.title}</b>
+      <div class="pc"><div>За:<ul>${f.pro.map(p => `<li>${p}</li>`).join('')}</ul></div>
+      <div>Против:<ul>${f.con.map(p => `<li>${p}</li>`).join('')}</ul></div></div></figcaption>`;
+  host.appendChild(fig);
+}
+</script>
+</body>
+</html>
