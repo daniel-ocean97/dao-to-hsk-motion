@@ -10,6 +10,9 @@
     ochre: '#d9b98a', pine: '#3d4a3f', water: '#d9d6cf',
     hair: '#3a2820', hairLight: '#5a4033', skin: '#efdccd', skinShade: '#d9bba8',
     linen: '#e8dfd2', linenShade: '#cfc3b3', iris: '#8ea4b0', lip: '#b77f7a',
+    // watercolour tints after the owner's style reference (docs/brand.md)
+    indigo: '#34496a', indigoSoft: '#8ea3bd', ochreWash: '#c9a46a', sienna: '#a8643a',
+    violetGray: '#9a8fa6', skinWash: '#e8c4a6', sepia: '#5b3a28', sepiaInk: '#24170f',
   };
 
   const defs = `
@@ -31,6 +34,35 @@
       <feFlood flood-color="#f7dcc0" flood-opacity=".95"/>
       <feComposite in2="b" operator="in" result="glow"/>
       <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <!-- watercolour wash: wobbly edge, dried dark rim, uneven pigment -->
+    <filter id="wc" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="4" result="warp"/>
+      <feDisplacementMap in="SourceGraphic" in2="warp" scale="12" xChannelSelector="R" yChannelSelector="G" result="shape"/>
+      <feGaussianBlur in="shape" stdDeviation="4" result="blur"/>
+      <feComposite in="shape" in2="blur" operator="arithmetic" k2="1.6" k3="-1.1" result="edge"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="3" seed="9" result="pig"/>
+      <feColorMatrix in="pig" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.8 0 0 0 -0.35" result="pigA"/>
+      <feComposite in="shape" in2="pigA" operator="in" result="body"/>
+      <feGaussianBlur in="body" stdDeviation="0.8" result="bodySoft"/>
+      <feMerge><feMergeNode in="bodySoft"/><feMergeNode in="edge"/></feMerge>
+    </filter>
+    <!-- looser, wetter wash for big soft areas -->
+    <filter id="wcWet" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="3" seed="12" result="warp"/>
+      <feDisplacementMap in="SourceGraphic" in2="warp" scale="26" xChannelSelector="R" yChannelSelector="G" result="shape"/>
+      <feGaussianBlur in="shape" stdDeviation="3" result="soft"/>
+      <feGaussianBlur in="shape" stdDeviation="9" result="blur"/>
+      <feComposite in="soft" in2="blur" operator="arithmetic" k2="1.5" k3="-0.9" result="edge"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.025" numOctaves="2" seed="21" result="pig"/>
+      <feColorMatrix in="pig" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.6 0 0 0 -0.3" result="pigA"/>
+      <feComposite in="soft" in2="pigA" operator="in" result="body"/>
+      <feMerge><feMergeNode in="body"/><feMergeNode in="edge"/></feMerge>
+    </filter>
+    <!-- brush line: slight tremor -->
+    <filter id="inkLine" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.09" numOctaves="2" seed="5" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.6"/>
     </filter>
     <filter id="paperTex" x="0" y="0" width="100%" height="100%">
       <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="11"/>
@@ -173,5 +205,85 @@
 
   const paper = `<rect width="1920" height="1080" filter="url(#paperTex)" pointer-events="none"/>`;
 
-  DH.ink = { C, defs, layer, taper, smooth, ridge, landscape, rock, pine, paper };
+  // Deterministic hash in [0, 1).
+  const hash = (i, seed = 0) => {
+    const x = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  // Transparent watercolour layer; layers glaze over each other (multiply).
+  function wash(d, color, op = 0.6, filter = 'wc') {
+    return `<path d="${d}" fill="${color}" fill-opacity="${op}" filter="url(#${filter})" style="mix-blend-mode:multiply"/>`;
+  }
+
+  // Broken brush contour: a dashed main line plus a faint continuous hairline.
+  function inkLine(d, w = 1.6, op = 0.85, color = C.ink, dash = '70 8 30 14 110 6 45 10') {
+    return `<g filter="url(#inkLine)" opacity="${op}"><path d="${d}" fill="none" stroke="${color}" stroke-width="${w}"
+      stroke-linecap="round" stroke-dasharray="${dash}"/><path d="${d}" fill="none" stroke="${color}"
+      stroke-width="${(w * 0.4).toFixed(2)}" stroke-linecap="round" opacity=".55"/></g>`;
+  }
+
+  // Points along an SVG path, measured by the browser (deterministic).
+  let probe = null;
+  function sampleD(d, n) {
+    if (!probe) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('width', '0');
+      svg.setAttribute('height', '0');
+      svg.style.position = 'absolute';
+      probe = document.createElementNS(NS, 'path');
+      svg.appendChild(probe);
+      document.body.appendChild(svg);
+    }
+    probe.setAttribute('d', d);
+    const L = probe.getTotalLength(), pts = [];
+    for (let i = 0; i <= n; i++) {
+      const p = probe.getPointAtLength(L * i / n);
+      pts.push({ x: p.x, y: p.y });
+    }
+    return pts;
+  }
+
+  // Living brush contour: pressure changes along the line and the brush lifts
+  // off the paper in a few places, so the line breaks.
+  function inkContour(d, o = {}) {
+    const w = o.w ?? 1.8, seed = o.seed ?? 1, color = o.color ?? C.ink, n = o.n ?? 90;
+    const pts = sampleD(d, n);
+    const gaps = o.gaps ?? 3;
+    const cuts = [];
+    for (let i = 0; i < gaps; i++) {
+      const c = 0.08 + 0.84 * hash(i, seed);
+      cuts.push([c, c + 0.025 + 0.05 * hash(i + 20, seed)]);
+    }
+    const inGap = (s) => cuts.some(([a, b]) => s > a && s < b);
+    let s = '', run = [];
+    const flush = () => {
+      if (run.length > 2) {
+        const seg = run.map((r) => r.p), ws = run.map((r) => r.w);
+        s += `<path d="${taper(seg, (u) => ws[Math.round(u * (ws.length - 1))] * Math.min(1, Math.sin(Math.PI * u) * 3 + 0.15))}" fill="${color}"/>`;
+      }
+      run = [];
+    };
+    pts.forEach((p, i) => {
+      const u = i / n;
+      if (inGap(u)) { flush(); return; }
+      run.push({ p, w: w * (0.3 + 0.7 * (0.5 + 0.5 * DH.noise(u * 9, seed))) });
+    });
+    flush();
+    return `<g filter="url(#inkLine)" opacity="${o.op ?? 0.85}">${s}</g>`;
+  }
+
+  // Ink and paint splatter around a point.
+  function splatter(cx, cy, r, n, seed, color, op = 0.6) {
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      const a = hash(i, seed) * Math.PI * 2, d = r * Math.sqrt(hash(i + 50, seed));
+      const size = 0.6 + 2.8 * Math.pow(hash(i + 99, seed), 3);
+      s += `<circle cx="${(cx + Math.cos(a) * d).toFixed(1)}" cy="${(cy + Math.sin(a) * d).toFixed(1)}" r="${size.toFixed(2)}" fill="${color}" opacity="${(op * (0.5 + 0.5 * hash(i + 7, seed))).toFixed(2)}"/>`;
+    }
+    return s;
+  }
+
+  DH.ink = { C, defs, layer, taper, smooth, ridge, landscape, rock, pine, paper, hash, wash, inkLine, sampleD, inkContour, splatter };
 })(window);
