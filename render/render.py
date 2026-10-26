@@ -3,6 +3,10 @@
 The scene must expose window.renderAt(t) and window.DURATION (seconds).
 Frame i is rendered at t = i / fps, so frames are reproducible in any order.
 
+Pages are served from the repository root over a local HTTP server: images
+loaded from file:// would taint canvas and WebGL, so pixel access would fail.
+Set CHROMIUM_EXECUTABLE to use a browser other than Playwright's own.
+
 Examples:
     uv run render/render.py videos/probe-rita/index.html
     uv run render/render.py videos/probe-rita/index.html --stills 1.0 4.5
@@ -10,11 +14,15 @@ Examples:
 """
 
 import argparse
+import contextlib
+import functools
 import glob
+import http.server
 import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -40,13 +48,35 @@ def find_tool(name: str) -> str:
     sys.exit(f"{name} not found: install FFmpeg first")
 
 
+@contextlib.contextmanager
+def serve(root: Path = ROOT):
+    """Serve root on a free localhost port; yield a function mapping a path to its URL."""
+
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(root)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}/"
+    try:
+        yield lambda path: base + path.resolve().relative_to(root).as_posix()
+    finally:
+        server.shutdown()
+
+
+def launch(p):
+    exe = os.environ.get("CHROMIUM_EXECUTABLE")
+    return p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
+
+
 def render_frames(html: Path, frames_dir: Path, fps: int, times: list[float] | None) -> list[Path]:
     frames_dir.mkdir(parents=True, exist_ok=True)
     written = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
+    with sync_playwright() as p, serve() as url:
+        browser = launch(p)
         page = browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
-        page.goto(html.resolve().as_uri() + "?render")
+        page.goto(url(html) + "?render")
         page.wait_for_function("typeof window.renderAt === 'function'")
         duration = page.evaluate("window.DURATION")
         if times is None:

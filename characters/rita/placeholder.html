@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Рита — временная картинка</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { width: 1024px; height: 1536px; overflow: hidden; }
+  #stage svg { display: block; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/ink.js"></script>
+<script src="rita.js"></script>
+<script>
+// Stand-in for the generated art (docs/rita-generation.md): one still pose of the
+// code-drawn Rita on plain paper, 1024x1536 (2:3). Only for testing the rig until
+// the real images exist; it is not a reference for her look.
+// ?shot=pose-a | pose-a-blink | pose-b | pose-b-turn | pose-b-turn-blink
+const { defs } = DH.ink;
+// A slightly cooler white than the brand paper, as a generator would give.
+const PAPER = '#faf9f5';
+const SHOTS = {
+  'pose-a': () => DH.rita.poseA({ t: 0.4, wind: 0.2 }),
+  'pose-a-blink': () => DH.rita.poseA({ t: 0.4, wind: 0.2, blink: 1 }),
+  'pose-b': () => DH.rita.poseB({ t: 0.4, wind: 0.22 }),
+  'pose-b-turn': () => DH.rita.poseB({ t: 0.4, wind: 0.22, turn: 1 }),
+  'pose-b-turn-blink': () => DH.rita.poseB({ t: 0.4, wind: 0.22, turn: 1, blink: 1 }),
+};
+
+function renderAt() {
+  const shot = new URLSearchParams(location.search).get('shot') || 'pose-a';
+  const r = SHOTS[shot]();
+  const sc = shot.startsWith('pose-a') ? 1.95 : 2.6;
+  document.getElementById('stage').innerHTML = `<svg width="1024" height="1536" viewBox="0 0 1024 1536" xmlns="http://www.w3.org/2000/svg">${defs}
+    <rect width="1024" height="1536" fill="${PAPER}"/>
+    <g transform="translate(600 1420) scale(${sc})">${r.svg}</g></svg>`;
+}
+
+window.SHOTS = Object.keys(SHOTS);
+window.renderAt = renderAt;
+window.DURATION = 0;
+renderAt();
+</script>
+</body>
+</html>

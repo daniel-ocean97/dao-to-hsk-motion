@@ -37,6 +37,27 @@ out/                 кадры и готовые MP4 (в git не попада�
 .claude/             скилл vizavi-motion, агент chinese-checker
 ```
 
+## Как посмотреть сцену
+
+Сцены открываем через локальный сервер, а не двойным щелчком по файлу:
+браузер не даёт коду читать пиксели картинок, открытых как файл, а механизму
+анимации Риты (`shared/rig.js`) это нужно.
+
+```bash
+uv run python -m http.server 8000
+# открыть http://localhost:8000/videos/probe-rig/
+```
+
+Проба механизма анимации на временной картинке:
+
+```bash
+uv run render/placeholders.py                     # временные картинки Риты -> out/rita-placeholder/
+uv run render/render.py videos/probe-rig/index.html   # MP4 -> out/probe-rig/
+```
+
+`?debug` в адресе показывает сетку и области: красное гнётся ветром, синее
+подменяется (`?debug=turn` — голова при повороте, `?debug=blink` — глаза).
+
 ## Инструменты
 
 - Python 3.13 и [uv](https://docs.astral.sh/uv/) — скрипт рендера
