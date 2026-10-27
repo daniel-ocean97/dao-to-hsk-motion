@@ -226,7 +226,11 @@
         // asymmetric: each side has its own width; rounded top, concave flanks
         const u = (x - p.x) / (x < p.x ? (p.wl ?? p.w) : (p.wr ?? p.w));
         const a = Math.abs(u);
-        if (a < 1) hgt = Math.max(hgt, p.h * Math.pow(1 - a, p.k ?? 1.5) * (1 - 0.3 * Math.pow(1 - a, 10)));
+        if (a < 1) {
+          // dome: steep sides, round top (karst towers); default: concave flanks
+          const f = p.dome ? Math.pow(1 - Math.pow(a, p.dome), 0.5) : Math.pow(1 - a, p.k ?? 1.5) * (1 - 0.3 * Math.pow(1 - a, 10));
+          hgt = Math.max(hgt, p.h * f);
+        }
       }
       // shoulders and gullies along the slope, finer jitter on top
       pts.push([x, base - hgt * (1 + 0.12 * fbm(n, x / 140 + 7)) + fbm(n, x / 45) * jag]);
@@ -253,6 +257,8 @@
     const top = Math.min(...o.ridge.map((p) => p[1]));
     const bottom = o.fadeTo + 40;
     const body = [...o.ridge.map(([x, y]) => [x, y, 0.18]), [o.ridge.at(-1)[0], bottom, 0.05], [o.ridge[0][0], bottom, 0.05]];
+    // optional opaque underlay in the sky colour: the sun behind must not show through
+    if (o.under) { ctx.fillStyle = o.under; fillPoly(ctx, body.map(([x, y]) => [x, y + 3])); }
     // main wash, then a darker glaze near the ridge (wet-in-wet, pigment settles high)
     wash(ctx, body, o.color, { layers: 28, alpha: 0.05, seed: o.seed });
     if (o.deep) {
@@ -416,5 +422,5 @@
     return c;
   }
 
-  DH.wc = { rng, noise1, fbm, canvas, rgba, deform, wash, granulate, blooms, fadeDown, taper, dryStroke, ridge, peakRow, mountains, rock, pineBranch, sun, mistBand, paperSheet };
+  DH.wc = { rng, noise1, fbm, canvas, rgba, hexRgb, fillPoly, deform, wash, granulate, blooms, fadeDown, taper, dryStroke, ridge, peakRow, mountains, rock, pineBranch, sun, mistBand, paperSheet };
 })(window);

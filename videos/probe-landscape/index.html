@@ -60,8 +60,8 @@ function midRidge(seed) {
 function paintPlace(pal) {
   const L = {};
   const ox = X0, w = X1 - X0;
-  L.far = { c: W.mountains({ w, h: 520, ox, oy: 260, ridge: farRidge(3), color: pal.far[0], deep: pal.far[1], fadeTo: 700, seed: 3 }), ox, oy: 260, p: 0.25 };
-  L.mid = { c: W.mountains({ w, h: 560, ox, oy: 380, ridge: midRidge(5), color: pal.mid[0], deep: pal.mid[1], fadeTo: 770, ink: 16, inkColor: '#3e3a36', seed: 5 }), ox, oy: 380, p: 0.55 };
+  L.far = { c: W.mountains({ w, h: 520, ox, oy: 260, ridge: farRidge(3), color: pal.far[0], under: pal.skyLow, deep: pal.far[1], fadeTo: 700, seed: 3 }), ox, oy: 260, p: 0.25 };
+  L.mid = { c: W.mountains({ w, h: 560, ox, oy: 380, ridge: midRidge(5), color: pal.mid[0], under: pal.skyLow, deep: pal.mid[1], fadeTo: 770, ink: 16, inkColor: '#3e3a36', seed: 5 }), ox, oy: 380, p: 0.55 };
   if (pal.sun) L.sun = { ...W.sun(pal.sun), p: 0.15 };
 
   // water: a pale wash with horizontal streaks
