@@ -239,7 +239,7 @@ function paintWall() {
   begin('mid', 0.5);
   ctx.drawImage(W.mountains({ w: 2400, h: 760, ox: -240, oy: 300, ridge: midR, color: '#9aa391', deep: '#6f7a68', fadeTo: 900, ink: 18, inkColor: INK2, seed: 77, under: '#ebe8e0' }), -240, 300);
   const wallRidge = midR.filter(([x]) => x > -80 && x < 2080);
-  begin('wall', 0.5, { ridge: wallRidge });
+  begin('wall', 0.5, { ridge: wallRidge, drops: spatter(wallRidge, 90) });
   greatWall(ctx, wallRidge, { thick: (x) => 17 - 3 * (x / 2000), towers: [320, 784, 1400, 1856], seed: 80 });
   begin('mistB', 0.7);
   mist(820, 140, '#f3f1ec', 78, 0.9);
@@ -278,6 +278,19 @@ function brush(c, x, y, dir, t) {
   c.restore();
 }
 
+// Ink spatter flung off the brush as it moves: small drops land just ahead and below the
+// stroke, a few longer flecks; each appears when the brush passes and stays on the paper.
+function spatter(ridge, seed) {
+  const r = rng(seed), drops = [];
+  for (let i = 0; i < 90; i++) {
+    const q = ridge[Math.floor(r() * ridge.length)];
+    const big = r() < 0.15;
+    drops.push({ x0: q[0], x: q[0] + 6 + r() * 40, y: q[1] + (r() - 0.35) * 46, rad: big ? 2.2 + r() * 2.5 : 0.7 + r() * 1.6,
+      fleck: r() < 0.2 ? (r() - 0.5) * 1.2 : null, a: 0.35 + 0.5 * r() });
+  }
+  return drops;
+}
+
 // The brush runs ahead of the camera and writes the wall from left to right; towers appear
 // as the line reaches them. The camera flies along with a slight push-in.
 function frameWall(t) {
@@ -311,6 +324,23 @@ function frameWall(t) {
       out.beginPath(); out.moveTo(wet[k - 1][0], wet[k - 1][1] + 3); out.lineTo(wet[k][0], wet[k][1] + 3); out.stroke();
     }
     brush(out, pt[0], pt[1] + 2, Math.atan2(pt[1] - prev[1], pt[0] - prev[0]), t);
+  }
+  // spatter left behind by the brush (drawn in the same world transform)
+  const zs = 1 + (cam.zoom - 1) * LAYERS.wall.p;
+  out.setTransform(zs, 0, 0, zs, 960 + zs * (-960 - cam.x * LAYERS.wall.p), 540 + zs * (-540 - cam.y * LAYERS.wall.p));
+  for (const d of LAYERS.wall.drops) {
+    const age = (head - d.x0) / 60; // in units of brush travel
+    if (age <= 0) continue;
+    const k = Math.min(1, age); // the drop flies out to its place
+    const x = d.x0 + (d.x - d.x0) * k, y = d.y;
+    out.fillStyle = rgba(INK, d.a * Math.min(1, age * 2));
+    if (d.fleck !== null) {
+      out.save(); out.translate(x, y); out.rotate(d.fleck);
+      out.beginPath(); out.ellipse(0, 0, d.rad * 3, d.rad * 0.6, 0, 0, Math.PI * 2); out.fill();
+      out.restore();
+    } else {
+      out.beginPath(); out.arc(x, y, d.rad, 0, Math.PI * 2); out.fill();
+    }
   }
   show('mistB', cam, 1, -((t * 20) % 200));
   show('near', cam);
@@ -644,6 +674,7 @@ function paintShanghai() {
   f.globalCompositeOperation = 'destination-out';
   fillPoly(f, hole);
   f.restore();
+  hideLights(hole); // no windows inside the opening
   dryStroke(f, [...hole, hole[0]], 1.6, '#1d2130', { alpha: 0.6, hairs: 1, dry: 0.1, seed: 510 });
   // Oriental Pearl: tapered legs and shaft, painted spheres with a light side
   const op = { x: 640 };
