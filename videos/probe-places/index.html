@@ -332,13 +332,24 @@ function addLit(poly) {
   lit.closePath();
 }
 
-function building(c, poly, { color, shade, seed, under = '#3d4459', edge = 0.035, ink = true }) {
+// Split long edges into short ones: wash() roughens an edge in proportion to its length,
+// so a 500 px side of a tower would otherwise spill a wide pale halo into the sky.
+function densify(poly, step = 14) {
+  const out = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+    for (let k = 0; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+  }
+  return out;
+}
+
+function building(c, poly, { color, shade, seed, under = '#3d4459', edge = 0.06, ink = true }) {
   addLit(poly);
   const xs = poly.map(([x]) => x), ys = poly.map(([, y]) => y);
   const xMin = Math.min(...xs), xMax = Math.max(...xs), yMin = Math.min(...ys), yMax = Math.max(...ys);
   c.fillStyle = under;
   fillPoly(c, poly);
-  wash(c, poly.map(([x, y]) => [x, y, edge]), color, { layers: 14, alpha: 0.1, seed });
+  wash(c, densify(poly).map(([x, y]) => [x, y, edge]), color, { layers: 14, alpha: 0.1, seed });
   // shaded side: the right part of the building, its own ragged glaze
   const sx = xMin + (xMax - xMin) * 0.58;
   c.save();
