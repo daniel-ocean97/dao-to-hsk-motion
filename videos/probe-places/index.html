@@ -56,6 +56,30 @@ function mist(y, h, color, seed, alpha = 1) {
 function greatWall(c, ridge, { thick, towers, seed }) {
   const r = rng(seed);
   const top = ridge.map(([x, y]) => [x, y + thick(x) * 0.15]);
+  // towers first, so the wall passes in front of their foot
+  for (const tx of towers) {
+    const at = top.reduce((bb, p) => (Math.abs(p[0] - tx) < Math.abs(bb[0] - tx) ? p : bb)), t = thick(tx);
+    const tc = W.canvas(c.canvas.width, c.canvas.height), tcx = tc.getContext('2d');
+    tcx.setTransform(c.getTransform());
+    watchtower(tcx, at, t, seed + tx);
+    // the foot dissolves along the slope it stands on: erase below a ragged line that
+    // follows the ground a little under the wall, with a soft wet edge
+    const rr = rng(seed + tx + 7), cut = [];
+    for (const [x, y] of top) if (Math.abs(x - at[0]) < t * 3) cut.push([x, y + t * (0.9 + 0.25 * rr())]);
+    tcx.globalCompositeOperation = 'destination-out';
+    tcx.filter = `blur(${Math.max(2, t * 0.35)}px)`;
+    tcx.fillStyle = '#000';
+    tcx.beginPath();
+    cut.forEach(([x, y], i) => (i ? tcx.lineTo(x, y) : tcx.moveTo(x, y)));
+    tcx.lineTo(cut.at(-1)[0], at[1] + t * 40);
+    tcx.lineTo(cut[0][0], at[1] + t * 40);
+    tcx.closePath();
+    tcx.fill();
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(tc, 0, 0);
+    c.restore();
+  }
   const walk = top.map(([x, y]) => [x, y + thick(x) * 0.28]);
   const foot = top.map(([x, y]) => [x, y + thick(x)]);
   // outer face (shade), then the walkway (light)
@@ -94,32 +118,13 @@ function greatWall(c, ridge, { thick, towers, seed }) {
   dryStroke(c, top, Math.max(1.4, 2.4), INK, { alpha: 0.7, hairs: 2, dry: 0.2, seed: seed + 3 });
   dryStroke(c, walk, 1.4, INK, { alpha: 0.4, hairs: 1, dry: 0.4, seed: seed + 4 });
   dryStroke(c, foot, 1.6, INK, { alpha: 0.45, hairs: 2, dry: 0.55, seed: seed + 5 });
-  for (const tx of towers) {
-    const at = top.reduce((b, p) => (Math.abs(p[0] - tx) < Math.abs(b[0] - tx) ? p : b)), t = thick(tx);
-    // painted apart, its foot then fades out like a wash running into the hill
-    const tc = W.canvas(c.canvas.width, c.canvas.height), tcx = tc.getContext('2d');
-    tcx.setTransform(c.getTransform());
-    watchtower(tcx, at, t, seed + tx);
-    tcx.setTransform(1, 0, 0, 1, 0, 0);
-    tcx.globalCompositeOperation = 'destination-out';
-    const m = c.getTransform(), y0 = m.f + at[1] + t * 0.9, y1 = m.f + at[1] + t * 1.9;
-    const gr = tcx.createLinearGradient(0, y0, 0, y1);
-    gr.addColorStop(0, 'rgba(0,0,0,0)');
-    gr.addColorStop(1, 'rgba(0,0,0,1)');
-    tcx.fillStyle = gr;
-    tcx.fillRect(0, y0, tc.width, y1 - y0 + 4);
-    c.save();
-    c.setTransform(1, 0, 0, 1, 0, 0);
-    c.drawImage(tc, 0, 0);
-    c.restore();
-  }
 }
 
 // A watchtower standing on the wall, drawn by hand rather than with a ruler: walls that
 // lean in a little and wobble, merlons of uneven size, ragged washes, a broken outline.
 function watchtower(c, [x, y], t, seed) {
   const r = rng(seed);
-  const w = t * 3.2, h = t * 2.6, yTop = y - h, yBase = y + t * 1.9;
+  const w = t * 3.2, h = t * 2.6, yTop = y - h, yBase = y + t * 1.6;
   const j = () => (r() - 0.5) * t * 0.16; // hand jitter
   const bl = [x - w / 2 + j(), yBase], tl = [x - w * 0.47 + j(), yTop + j() * 0.5];
   const tr = [x + w * 0.47 + j(), yTop + j() * 0.5], br = [x + w / 2 + j(), yBase];
