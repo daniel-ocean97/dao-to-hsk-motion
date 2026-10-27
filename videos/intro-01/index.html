@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>intro-01: черновая сборка</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: #f5f2ec; }
+  #stage canvas { position: absolute; left: 0; top: 0; display: block; }
+  #paper { mix-blend-mode: multiply; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="out" width="1920" height="1080"></canvas><canvas id="paper" width="1920" height="1080"></canvas></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/rig.js"></script>
+<script src="../../shared/watercolor.js"></script>
+<script src="../../shared/caption.js"></script>
+<script src="../../shared/preview.js"></script>
+<script src="../../characters/rita/rig-art.js"></script>
+<script src="scenes/prologue.js"></script>
+<script src="scenes/places.js"></script>
+<script>
+// intro-01, draft assembly (docs/intro-01-storyboard.md). So far 0-7.5 s:
+//   0.0-5.0  scenes 1-2, prologue and gust (scenes/prologue.js)
+//   4.6-5.4  a sheet of paper passes through the frame from right to left: its front edge
+//            covers the gust, its back edge uncovers the wall
+//   5.0-7.5  scene 3, the Great Wall (scenes/places.js)
+// Each scene draws into its own buffer; renderAt(t) picks the scenes for time t and
+// composes them. Painting all the layers takes a few minutes before the first frame.
+const { ease, lerp, progress } = DH;
+const W = DH.wc;
+const DURATION = 7.5, PAPER = '#f5f2ec';
+const out = document.getElementById('out').getContext('2d');
+const buf = W.canvas(1920, 1080).getContext('2d');
+
+// ---------- the paper pass ----------
+
+// A ragged vertical edge at position x (seeded, so it keeps its shape as it moves); it
+// leans a little, the top ahead of the bottom.
+function edge(x, seed) {
+  const r = W.rng(seed), pts = [];
+  for (let y = -40; y <= 1120; y += 40) pts.push([x + 120 * Math.sin(y * 0.006 + seed) + 60 * (r() - 0.5) - (y / 1080) * 180, y]);
+  return pts;
+}
+// The region right of an edge, as a closed polygon.
+const rightOf = (pts) => [...pts, [2400, 1120], [2400, -40]];
+
+// The sheet: front edge from 4.58 to 4.98 s (as the paper wipe of the gust probe), back
+// edge from 4.9 to 5.35 s. Returns the two edge x positions, or null outside the pass.
+function sheet(t) {
+  if (t < 4.58 || t > 5.35) return null;
+  return {
+    front: lerp(2150, -400, ease.draw(progress(t, 4.58, 4.98))),
+    back: lerp(2150, -400, ease.draw(progress(t, 4.9, 5.35))),
+  };
+}
+
+function fillSoft(ctx, poly, color, blur) {
+  ctx.fillStyle = color;
+  ctx.filter = `blur(${blur}px)`;
+  W.fillPoly(ctx, poly);
+  ctx.filter = 'none';
+}
+
+// ---------- timeline ----------
+
+let prologue, wall;
+function renderAt(t) {
+  t = Math.min(Math.max(t, 0), DURATION - 1e-6);
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  const s = sheet(t);
+  if (t < 4.98) prologue.frame(out, t);
+  else if (!s) { wall.frame(out, t - 5); return; }
+  if (!s) return;
+  // the sheet covers everything right of its front edge (wet, soft edge)
+  const front = edge(s.front, 77), back = edge(s.back, 79);
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  fillSoft(out, rightOf(front), PAPER, 10);
+  W.fillPoly(out, rightOf(front.map(([x, y]) => [x + 28, y])));
+  // and the wall comes through right of its back edge
+  if (s.back < 2150) {
+    wall.frame(buf, t - 5);
+    out.save();
+    out.beginPath();
+    rightOf(back.map(([x, y]) => [x + 20, y])).forEach(([x, y], i) => (i ? out.lineTo(x, y) : out.moveTo(x, y)));
+    out.closePath();
+    out.clip();
+    out.drawImage(buf.canvas, 0, 0);
+    out.restore();
+    // a soft paper rim along the back edge, so the cut is not hard
+    out.save();
+    out.filter = 'blur(12px)';
+    out.fillStyle = PAPER;
+    out.beginPath();
+    back.forEach(([x, y], i) => (i ? out.lineTo(x + 40, y) : out.moveTo(x + 40, y)));
+    [...back].reverse().forEach(([x, y]) => out.lineTo(x - 10, y));
+    out.closePath();
+    out.fill();
+    out.restore();
+  }
+  out.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+(async () => {
+  [prologue, wall] = await Promise.all([SCENES.prologue({ wipe: false }), SCENES.place('wall')]);
+  document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
+  window.DURATION = DURATION;
+  window.renderAt = renderAt;
+  DH.preview(renderAt, DURATION);
+})().catch((e) => {
+  document.body.insertAdjacentHTML('afterbegin', `<pre style="color:#f88;font:16px monospace">${e.stack}</pre>`);
+  throw e;
+});
+</script>
+</body>
+</html>
