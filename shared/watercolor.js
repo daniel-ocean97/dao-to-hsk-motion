@@ -271,7 +271,8 @@
     ctx.strokeStyle = rgba(o.deep || o.color, 0.22);
     ctx.lineWidth = 2.2;
     ctx.beginPath();
-    deform(o.ridge.map(([x, y]) => [x, y, 0.02]), 2, rng(o.seed + 3)).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    // deform() closes the loop; keep only the points up to the last ridge point
+    deform(o.ridge.map(([x, y]) => [x, y, 0.02]), 2, rng(o.seed + 3)).slice(0, (o.ridge.length - 1) * 4 + 1).forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.stroke();
     ctx.restore();
     granulate(ctx, o.w, o.h, 0.35);
