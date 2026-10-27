@@ -384,7 +384,8 @@
       pivotY: d.pivotY != null ? d.pivotY * ky : undefined, topY: d.topY != null ? d.topY * ky : undefined,
     }, regions[d.region], verts, H));
     const weightSum = new Float32Array(verts.length / 2);
-    for (const d of deformers) d.weight.forEach((w, i) => { weightSum[i] = Math.min(1, weightSum[i] + w); });
+    // debug tint: only the parts the wind bends (the breath region is a plain box)
+    for (const d of deformers) if (d.type === 'flow') d.weight.forEach((w, i) => { weightSum[i] = Math.min(1, weightSum[i] + w); });
 
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);

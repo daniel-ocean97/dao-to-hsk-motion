@@ -23,7 +23,7 @@
 <script src="../../characters/rita/rig-art.js"></script>
 <script>
 // Pose A from the generator (characters/rita/art/pose-a.webp) in the scene-1 setting:
-//   0.0-5.0  camera arc with a push-in, wind in hair, sash and hem, breath; gust 2.8-3.6
+//   0.0-5.0  camera arc with a push-in, steady wind in hair, sash, sleeve and hem, breath
 // No blink yet: the closed-eyes image is still to be generated.
 // ?debug shows the mesh and the bent regions.
 const { ease, lerp, progress } = DH;
@@ -36,8 +36,6 @@ const back = document.getElementById('back'), front = document.getElementById('f
 // The figure is about 1065 px of the 1116 px image; scale it to ~644 scene units like the probes.
 const RITA = { x: 1250, y: 1012, h: 675 };
 
-function gustAt(t) { return ease.out(progress(t, 2.8, 3.1)) * (1 - ease.draw(progress(t, 3.3, 3.9))); }
-
 let rig;
 function renderAt(t) {
   t = Math.min(Math.max(t, 0), DURATION - 1e-6);
@@ -46,7 +44,7 @@ function renderAt(t) {
   back.innerHTML = defs + landscape(cam, t, { horizon: 700 }) +
     `<g transform="${layer(cam, 1)}">${rock(RITA.x, RITA.y, 560)}</g>`;
   front.innerHTML = `<g transform="${layer(cam, 1.7)}">${pine(-80, -20, 1.5, t, true)}</g>${paper}`;
-  rig.drawAt({ t, gust: gustAt(t), debug }, { cam, ...RITA });
+  rig.drawAt({ t, debug }, { cam, ...RITA });
 }
 
 DH.rig.load(DH.ritaArt.a, { base: '../../', paper: C.paper }).then((r) => {
