@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Проба: поза A из генератора</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; }
+  #stage svg { position: absolute; left: 0; top: 0; display: block; }
+  #ui { position: fixed; left: 12px; right: 12px; bottom: 10px; display: flex; gap: 10px; align-items: center;
+        font: 14px/1 "Segoe UI", sans-serif; color: #ece6dc; }
+  #ui input { flex: 1; }
+  body.render #ui { display: none; }
+</style>
+</head>
+<body>
+<div id="stage"><svg id="back" width="1920" height="1080" viewBox="0 0 1920 1080"></svg><svg id="front" width="1920" height="1080" viewBox="0 0 1920 1080"></svg></div>
+<div id="ui"><button id="play">▶</button><input id="scrub" type="range" min="0" max="5" step="0.01" value="0"><span id="time">0.00</span></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/ink.js"></script>
+<script src="../../shared/rig.js"></script>
+<script src="../../characters/rita/rig-art.js"></script>
+<script>
+// Pose A from the generator (characters/rita/art/pose-a.webp) in the scene-1 setting:
+//   0.0-5.0  camera arc with a push-in, wind in hair, sash and hem, breath; gust 2.8-3.6
+// No blink yet: the closed-eyes image is still to be generated.
+// ?debug shows the mesh and the bent regions.
+const { ease, lerp, progress } = DH;
+const { C, defs, layer, landscape, rock, pine, paper } = DH.ink;
+const DURATION = 5;
+const params = new URLSearchParams(location.search);
+const debug = params.has('debug') ? (params.get('debug') || true) : false;
+const back = document.getElementById('back'), front = document.getElementById('front');
+
+// The figure is about 1065 px of the 1116 px image; scale it to ~644 scene units like the probes.
+const RITA = { x: 1250, y: 1012, h: 675 };
+
+function gustAt(t) { return ease.out(progress(t, 2.8, 3.1)) * (1 - ease.draw(progress(t, 3.3, 3.9))); }
+
+let rig;
+function renderAt(t) {
+  t = Math.min(Math.max(t, 0), DURATION - 1e-6);
+  const k = ease.draw(progress(t, 0, DURATION));
+  const cam = { x: lerp(-70, 70, k), y: lerp(0, -12, k), zoom: lerp(1.0, 1.1, k) };
+  back.innerHTML = defs + landscape(cam, t, { horizon: 700 }) +
+    `<g transform="${layer(cam, 1)}">${rock(RITA.x, RITA.y, 560)}</g>`;
+  front.innerHTML = `<g transform="${layer(cam, 1.7)}">${pine(-80, -20, 1.5, t, true)}</g>${paper}`;
+  rig.drawAt({ t, gust: gustAt(t), debug }, { cam, ...RITA });
+}
+
+DH.rig.load(DH.ritaArt.a, { base: '../../', paper: C.paper }).then((r) => {
+  rig = r;
+  front.before(rig.canvas);
+  window.DURATION = DURATION;
+  window.renderAt = renderAt;
+  startPreview();
+}).catch((e) => {
+  document.body.insertAdjacentHTML('afterbegin', `<pre style="color:#f88;font:16px monospace">${e.message}\nОткрой страницу через http (см. README).</pre>`);
+  throw e;
+});
+
+// Preview UI only: the renderer calls renderAt(t) directly.
+function startPreview() {
+  if (params.has('render')) { document.body.classList.add('render'); return; }
+  const stage = document.getElementById('stage');
+  const fit = () => { stage.style.transform = `scale(${Math.min(innerWidth / 1920, (innerHeight - 40) / 1080)})`; };
+  addEventListener('resize', fit); fit();
+  const scrub = document.getElementById('scrub'), label = document.getElementById('time'), btn = document.getElementById('play');
+  let playing = false, startClock = 0, startT = 0;
+  const show = (t) => { renderAt(t); scrub.value = t; label.textContent = t.toFixed(2); };
+  scrub.oninput = () => { playing = false; btn.textContent = '▶'; show(+scrub.value); };
+  btn.onclick = () => { playing = !playing; btn.textContent = playing ? '❚❚' : '▶'; startClock = performance.now(); startT = +scrub.value; if (playing) tick(); };
+  function tick() { if (!playing) return; show((startT + (performance.now() - startClock) / 1000) % DURATION); requestAnimationFrame(tick); }
+  show(+(params.get('t') || 0));
+}
+</script>
+</body>
+</html>

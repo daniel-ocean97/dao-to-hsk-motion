@@ -92,9 +92,12 @@
   // with paper. So the wide fill is kept only where it is thicker than 2*close px:
   // lit areas of the dress stay, slivers of paper between wisps go.
   // solid (optional) marks pixels that are inside anyway.
-  function silhouette(d, w, h, bg, threshold, close, solid) {
+  function silhouette(d, w, h, bg, threshold, close, solid, inset) {
     const ink = new Uint8Array(w * h);
     for (let i = 0; i < w * h; i++) {
+      // a frame line drawn along the edge would wall the paper off from the border
+      const x = i % w, y = (i / w) | 0;
+      if (x < inset || y < inset || x >= w - inset || y >= h - inset) continue;
       const k = i * 4;
       const diff = Math.max(Math.abs(d[k] - bg[0]), Math.abs(d[k + 1] - bg[1]), Math.abs(d[k + 2] - bg[2]));
       ink[i] = diff > threshold ? 1 : 0;
@@ -155,7 +158,7 @@
     const bg = borderColor(d, w, h), paper = hexRgb(opt.paper);
     const solid = opt.solid && opt.solid.length ? polyMask(opt.solid, w, h, false).map((v) => (v > 127 ? 1 : 0)) : null;
     const soft = opt.soft && opt.soft.length ? polyMask(opt.soft, w, h, true) : null;
-    const alpha = silhouette(d, w, h, bg, opt.threshold, opt.close, solid);
+    const alpha = silhouette(d, w, h, bg, opt.threshold, opt.close, solid, opt.inset ?? 6);
     const gain = paper.map((p, c) => p / Math.max(1, bg[c]));
     const t0 = opt.threshold * 0.5, t1 = opt.threshold * 5;
     for (let i = 0; i < w * h; i++) {
@@ -325,7 +328,7 @@
 
   // cfg: { size: [w, h], anchor: [x, y], images: { name: url }, regions: { name: { poly, feather } },
   //        deformers: [...], swaps: { image: region }, solid: [region], soft: [region],
-  //        cell, threshold, close }
+  //        cell, threshold, close, inset }
   async function load(cfg, opt = {}) {
     const base = opt.base || '';
     const names = Object.keys(cfg.images);
@@ -343,7 +346,7 @@
     const prog = program(gl, VS, FS), lineProg = program(gl, VS, LINE_FS);
 
     const cut = {
-      paper: opt.paper || '#f5f2ec', threshold: cfg.threshold ?? 14, close: cfg.close ?? 10,
+      paper: opt.paper || '#f5f2ec', threshold: cfg.threshold ?? 14, close: cfg.close ?? 10, inset: cfg.inset,
       solid: (cfg.solid || []).map((k) => regions[k]),
       soft: (cfg.soft || []).map((k) => regions[k]),
     };
