@@ -50,69 +50,142 @@ function mist(y, h, color, seed, alpha = 1) {
 
 // ---------- Great Wall ----------
 
-// The wall follows a ridge: a band of masonry a little below the crest, battlements as
-// small teeth on top, watchtowers as blocks with a dark doorway and a flat parapet.
-function greatWall(c, ridge, { from, to, thick, towers, seed }) {
+// The wall runs along a ridge and shrinks with distance: thick(x) gives its height in px.
+// Seen from the side and a little above: a lit walkway on top, the outer face in shade
+// with a few courses of masonry, battlements as merlons along the outer edge.
+function greatWall(c, ridge, { thick, towers, seed }) {
   const r = rng(seed);
-  const top = ridge.slice(from, to).map(([x, y]) => [x, y + thick * 0.25]);
-  const bot = top.map(([x, y]) => [x, y + thick]);
-  const body = [...top.map(([x, y]) => [x, y, 0.02]), ...bot.reverse().map(([x, y]) => [x, y, 0.04])];
-  wash(c, body, '#b99566', { layers: 16, alpha: 0.09, seed });
-  wash(c, body.map(([x, y, v]) => [x, y + thick * 0.45, v]), '#6b5a48', { layers: 10, alpha: 0.05, seed: seed + 1 });
-  dryStroke(c, top, Math.max(1.6, thick * 0.18), INK, { alpha: 0.75, hairs: 2, dry: 0.25, seed: seed + 2 });
-  dryStroke(c, top.map(([x, y]) => [x, y + thick]), Math.max(1.2, thick * 0.14), INK, { alpha: 0.45, hairs: 2, dry: 0.5, seed: seed + 3 });
-  // battlements: small teeth along the top
-  c.fillStyle = rgba(INK, 0.6);
-  for (let i = 0; i < top.length; i += 1) {
-    if (i % 2) continue;
-    const [x, y] = top[i];
-    c.fillRect(x - thick * 0.12, y - thick * 0.32, thick * 0.24, thick * 0.32);
+  const top = ridge.map(([x, y]) => [x, y + thick(x) * 0.15]);
+  const walk = top.map(([x, y]) => [x, y + thick(x) * 0.28]);
+  const foot = top.map(([x, y]) => [x, y + thick(x)]);
+  // outer face (shade), then the walkway (light)
+  const face = [...walk.map(([x, y]) => [x, y, 0.01]), ...foot.slice().reverse().map(([x, y]) => [x, y, 0.02])];
+  c.fillStyle = '#d9c7a8';
+  fillPoly(c, face);
+  wash(c, face, '#9c7c56', { layers: 18, alpha: 0.09, seed });
+  wash(c, face.map(([x, y, v]) => [x, y + 4, v]), '#5f4c3b', { layers: 10, alpha: 0.05, seed: seed + 1 });
+  const path = [...top.map(([x, y]) => [x, y, 0.01]), ...walk.slice().reverse().map(([x, y]) => [x, y, 0.01])];
+  c.fillStyle = '#efe5d2';
+  fillPoly(c, path);
+  wash(c, path, '#c9a978', { layers: 10, alpha: 0.07, seed: seed + 2 });
+  // masonry courses: broken thin strokes along the face
+  for (let k = 1; k <= 3; k++) {
+    const course = top.map(([x, y]) => [x, y + thick(x) * (0.28 + k * 0.18)]);
+    let seg = [];
+    course.forEach((p, i) => {
+      if (r() < 0.12) { if (seg.length > 3) dryStroke(c, seg, 1.1, INK, { alpha: 0.28, hairs: 1, dry: 0.4, seed: seed + k * 100 + i }); seg = []; }
+      seg.push(p);
+    });
   }
-  // watchtowers
-  for (const ti of towers) {
-    const [x, y] = top[ti - from] || top[0];
-    const tw = thick * 2.6, th = thick * 2.3;
-    const blk = [[x - tw / 2, y + thick, 0.02], [x - tw / 2, y - th, 0.03], [x + tw / 2, y - th, 0.03], [x + tw / 2, y + thick, 0.02]];
-    c.fillStyle = '#efe6d6';
-    fillPoly(c, blk);
-    wash(c, blk, '#b08a5c', { layers: 12, alpha: 0.1, seed: seed + ti });
-    wash(c, [[x - tw / 2, y - th * 0.2, 0.03], [x + tw / 2, y - th * 0.2, 0.03], [x + tw / 2, y + thick, 0.03], [x - tw / 2, y + thick, 0.03]], '#5a4a3a', { layers: 8, alpha: 0.06, seed: seed + ti + 50 });
-    const out = [[x - tw / 2, y + thick], [x - tw / 2, y - th], [x + tw / 2, y - th], [x + tw / 2, y + thick]];
-    dryStroke(c, out, Math.max(1.5, thick * 0.16), INK, { alpha: 0.7, hairs: 2, dry: 0.3, seed: seed + ti + 7 });
-    // parapet teeth and a dark arched opening
-    c.fillStyle = rgba(INK, 0.7);
-    for (let k = 0; k < 5; k++) c.fillRect(x - tw / 2 + (k / 4) * (tw - thick * 0.3), y - th - thick * 0.35, thick * 0.3, thick * 0.35);
-    c.fillStyle = rgba('#2b211a', 0.75);
+  // battlements: merlons along the top, spaced by the local thickness
+  let nextX = top[0][0];
+  for (const [x, y] of top) {
+    if (x < nextX) continue;
+    const t = thick(x), mw = t * 0.17, mh = t * 0.22;
+    c.fillStyle = rgba('#cdb48c', 0.95);
+    c.fillRect(x - mw / 2, y - mh, mw, mh + 1);
+    c.fillStyle = rgba('#6b553f', 0.4);
+    c.fillRect(x + mw * 0.1, y - mh, mw * 0.4, mh + 1);
+    c.fillStyle = rgba(INK, 0.5);
+    c.fillRect(x - mw / 2, y - mh, mw, Math.max(1, t * 0.025));
+    nextX = x + t * 0.3;
+  }
+  // ink: the top edge firm, the foot of the wall broken
+  dryStroke(c, top, Math.max(1.4, 2.4), INK, { alpha: 0.7, hairs: 2, dry: 0.2, seed: seed + 3 });
+  dryStroke(c, walk, 1.4, INK, { alpha: 0.4, hairs: 1, dry: 0.4, seed: seed + 4 });
+  dryStroke(c, foot, 1.6, INK, { alpha: 0.45, hairs: 2, dry: 0.55, seed: seed + 5 });
+  for (const tx of towers) {
+    const at = top.reduce((b, p) => (Math.abs(p[0] - tx) < Math.abs(b[0] - tx) ? p : b)), t = thick(tx);
+    // painted apart, its foot then fades out like a wash running into the hill
+    const tc = W.canvas(c.canvas.width, c.canvas.height), tcx = tc.getContext('2d');
+    tcx.setTransform(c.getTransform());
+    watchtower(tcx, at, t, seed + tx);
+    tcx.setTransform(1, 0, 0, 1, 0, 0);
+    tcx.globalCompositeOperation = 'destination-out';
+    const m = c.getTransform(), y0 = m.f + at[1] + t * 0.9, y1 = m.f + at[1] + t * 1.9;
+    const gr = tcx.createLinearGradient(0, y0, 0, y1);
+    gr.addColorStop(0, 'rgba(0,0,0,0)');
+    gr.addColorStop(1, 'rgba(0,0,0,1)');
+    tcx.fillStyle = gr;
+    tcx.fillRect(0, y0, tc.width, y1 - y0 + 4);
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(tc, 0, 0);
+    c.restore();
+  }
+}
+
+// A watchtower standing on the wall: a block a little wider than the wall, a parapet
+// of merlons that stays inside its width, two arched openings, the right side in shade.
+function watchtower(c, [x, y], t, seed) {
+  // the base sinks into the hill, so the corners never hang over the slopes
+  const w = t * 3.2, h = t * 2.6, x0 = x - w / 2, x1 = x + w / 2, yTop = y - h, yBase = y + t * 1.9;
+  const body = [[x0, yBase, 0.01], [x0, yTop, 0.01], [x1, yTop, 0.01], [x1, yBase, 0.01]];
+  c.fillStyle = '#ece0c9';
+  fillPoly(c, body);
+  wash(c, body, '#b08a5c', { layers: 12, alpha: 0.08, seed, rough: 0.01 });
+  wash(c, [[x0 + t * 0.2, yTop + h * 0.15, 0.08], [x1 - t * 0.2, yTop + h * 0.1, 0.08], [x1 - t * 0.1, yBase - t * 0.1, 0.06], [x0 + t * 0.1, yBase - t * 0.1, 0.06]], '#8a6a48', { layers: 10, alpha: 0.05, seed: seed + 9 });
+  const base = c.createLinearGradient(0, yBase - h * 0.6, 0, yBase);
+  base.addColorStop(0, 'rgba(95,76,59,0)');
+  base.addColorStop(1, 'rgba(95,76,59,0.3)');
+  c.fillStyle = base;
+  c.fillRect(x0, yBase - h * 0.6, w, h * 0.6);
+  // shade on the right third
+  const shade = [[x + w * 0.18, yBase], [x + w * 0.18, yTop], [x1, yTop], [x1, yBase]];
+  c.fillStyle = rgba('#6b553f', 0.28);
+  fillPoly(c, shade);
+  // parapet: merlons from edge to edge, inside the width
+  const n = 5, mw = w / (2 * n - 1), mh = t * 0.45;
+  for (let i = 0; i < n; i++) {
+    const mx = x0 + i * 2 * mw;
+    c.fillStyle = '#d9c4a0';
+    c.fillRect(mx, yTop - mh, mw, mh + 1);
+    c.fillStyle = rgba('#6b553f', 0.3);
+    c.fillRect(mx + mw * 0.55, yTop - mh, mw * 0.45, mh + 1);
+    c.fillStyle = rgba(INK, 0.55);
+    c.fillRect(mx, yTop - mh, mw, Math.max(1, t * 0.03));
+  }
+  // arched openings
+  c.fillStyle = rgba('#2b211a', 0.8);
+  for (const ox of [-0.22, 0.22]) {
+    const cx = x + ox * w, ow = t * 0.42, oh = t * 0.75, oy = yTop + h * 0.32;
     c.beginPath();
-    c.ellipse(x, y - th * 0.35, thick * 0.32, thick * 0.55, 0, Math.PI, 0);
-    c.lineTo(x + thick * 0.32, y - th * 0.35 + thick * 0.5);
-    c.lineTo(x - thick * 0.32, y - th * 0.35 + thick * 0.5);
+    c.moveTo(cx - ow / 2, oy + oh);
+    c.lineTo(cx - ow / 2, oy + ow / 2);
+    c.arc(cx, oy + ow / 2, ow / 2, Math.PI, 0);
+    c.lineTo(cx + ow / 2, oy + oh);
+    c.closePath();
     c.fill();
   }
+  // outline exactly on the edges
+  const lw = Math.max(1.2, t * 0.045);
+  c.strokeStyle = rgba(INK, 0.72);
+  c.lineWidth = lw;
+  c.lineJoin = 'round';
+  c.strokeRect(x0 + lw / 2, yTop + lw / 2, w - lw, yBase - yTop - lw);
+  c.lineWidth = lw * 0.7;
+  c.beginPath(); c.moveTo(x0 + lw, yTop + t * 0.18); c.lineTo(x1 - lw, yTop + t * 0.18); c.stroke();
 }
 
 function paintWall() {
   sky('#f5f2ec', '#e9e6df');
-  const far = W.ridge({ x0: -240, x1: 2160, base: 560, jag: 10, seed: 71, peaks: W.peakRow({ x0: -240, x1: 2160, hMin: 90, hMax: 210, gap: 300, seed: 72 }) });
-  const midR = W.ridge({ x0: -240, x1: 2160, base: 700, jag: 14, seed: 73, step: 8, peaks: [
-    { x: 80, h: 200, wl: 300, wr: 220, k: 1.3 }, { x: 520, h: 290, wl: 240, wr: 260, k: 1.25 }, { x: 980, h: 210, wl: 220, wr: 260, k: 1.4 },
-    { x: 1420, h: 320, wl: 260, wr: 300, k: 1.2 }, { x: 1880, h: 230, w: 260 },
-  ] });
-  const near = W.ridge({ x0: -240, x1: 2160, base: 1010, jag: 16, seed: 75, step: 8, peaks: [
-    { x: 260, h: 260, wl: 420, wr: 300, k: 1.15 }, { x: 900, h: 160, w: 300 }, { x: 1600, h: 330, wl: 360, wr: 420, k: 1.1 },
-  ] });
-  const L1 = range({ oy: 260, ridge: far, color: '#c9cbc6', deep: '#b0b5b0', fadeTo: 640, seed: 74, under: '#ece9e2' });
+  const far = W.ridge({ x0: -240, x1: 2160, base: 520, jag: 10, seed: 71, peaks: W.peakRow({ x0: -240, x1: 2160, hMin: 90, hMax: 220, gap: 300, seed: 72 }) });
+  const L1 = range({ oy: 220, ridge: far, color: '#c9cbc6', deep: '#b0b5b0', fadeTo: 620, seed: 74, under: '#ece9e2' });
   ctx.drawImage(L1.c, L1.ox, L1.oy);
-  mist(600, 120, '#f1efe9', 76);
-  // middle range: muted green slopes, the wall on its crest
-  const m = W.canvas(2400, 760), mc = m.getContext('2d');
-  mc.drawImage(W.mountains({ w: 2400, h: 760, ox: -240, oy: 300, ridge: midR, color: '#9aa391', deep: '#6f7a68', fadeTo: 900, ink: 18, inkColor: INK2, seed: 77, under: '#ebe8e0' }), 0, 0);
-  mc.translate(240, -300);
-  greatWall(mc, midR, { from: 20, to: 290, thick: 13, towers: [70, 128, 205, 262], seed: 80 });
-  ctx.drawImage(m, -240, 300);
-  mist(820, 140, '#f3f1ec', 78, 0.9);
-  const L3 = W.mountains({ w: 2400, h: 600, ox: -240, oy: 640, ridge: near, color: '#55574f', deep: '#2f312b', fadeTo: 1200, ink: 26, inkColor: INK, seed: 79, under: '#e7e3da' });
-  ctx.drawImage(L3, -240, 640);
+  mist(600, 140, '#f1efe9', 76);
+  // the ridge the wall follows: rising from the near left to a crest, a saddle, a higher
+  // crest further away, then down into the mist on the right
+  const wallRidge = W.ridge({ x0: -240, x1: 2160, base: 1180, jag: 5, seed: 73, step: 6, peaks: [
+    { x: 560, h: 640, wl: 900, wr: 420, k: 1.05 }, { x: 1250, h: 700, wl: 380, wr: 520, k: 1.15 }, { x: 1780, h: 560, wl: 360, wr: 520, k: 1.2 },
+  ] });
+  const thick = (x) => 92 - 58 * DH.clamp((x + 100) / 2000) ** 0.9;
+  const m = W.canvas(2400, 1000), mc = m.getContext('2d');
+  mc.drawImage(W.mountains({ w: 2400, h: 1000, ox: -240, oy: 200, ridge: wallRidge, color: '#94a08c', deep: '#5f6b58', fadeTo: 1300, ink: 26, inkColor: INK2, seed: 77, under: '#ebe8e0' }), 0, 0);
+  mc.translate(240, -200);
+  greatWall(mc, wallRidge.filter(([x]) => x > -200 && x < 2000), { thick, towers: [560, 1250, 1780], seed: 80 });
+  ctx.drawImage(m, -240, 200);
+  // mist in the valley in front of the far crest, and over the far end of the wall
+  mist(820, 160, '#f3f1ec', 78, 0.55);
 }
 
 // ---------- Guilin ----------
@@ -126,24 +199,60 @@ function karstRow({ x0, x1, base, hMin, hMax, gap, seed }) {
   return W.ridge({ x0, x1, base, jag: 6, seed, step: 6, peaks });
 }
 
-function raft(c, x, y, s) {
-  // bamboo raft: a few long poles; fisherman: conical hat, body, a pole into the water
-  for (let i = 0; i < 4; i++) {
-    const pts = [];
-    for (let k = 0; k <= 8; k++) pts.push([x - 70 * s + k * 17.5 * s, y + i * 3 * s - Math.sin(k / 8 * Math.PI) * 3 * s]);
-    c.fillStyle = rgba(INK, 0.75);
-    fillPoly(c, taper(pts, (u) => 4 * s * (0.6 + 0.4 * Math.sin(u * Math.PI))));
+// Li river fishing boat: a long narrow hull with both ends curving up, a low arched
+// bamboo canopy in the middle, the fisherman in a conical hat poling at the stern.
+function boat(c, x, y, s) {
+  const L = 230 * s, H = 16 * s;
+  const curve = (u) => Math.pow(Math.abs(u * 2 - 1), 3) * 26 * s; // ends rise
+  const top = [], bot = [];
+  for (let i = 0; i <= 24; i++) {
+    const u = i / 24, px = x - L / 2 + u * L;
+    top.push([px, y - curve(u), 0.01]);
+    bot.push([px, y - curve(u) * 0.75 + H * Math.sin(u * Math.PI) * 0.9, 0.01]);
   }
-  c.fillStyle = rgba(INK, 0.85);
-  fillPoly(c, [[x - 8 * s, y - 2 * s], [x - 5 * s, y - 34 * s], [x + 6 * s, y - 34 * s], [x + 9 * s, y - 2 * s]]);
-  fillPoly(c, [[x - 18 * s, y - 33 * s], [x, y - 46 * s], [x + 18 * s, y - 33 * s]]);
+  const hull = [...top, ...bot.reverse()];
+  c.fillStyle = rgba('#3b2f26', 0.95);
+  fillPoly(c, hull);
+  wash(c, hull, '#6b5444', { layers: 10, alpha: 0.12, seed: 301, rough: 0.01 });
+  dryStroke(c, top.map(([a, b]) => [a, b]), 2.2 * s, INK, { alpha: 0.8, hairs: 2, dry: 0.15, seed: 302 });
+  // canopy: arched bamboo cover over the middle third
+  const cx = x - L * 0.05, cw = L * 0.34, ch = 30 * s;
+  const arch = [];
+  for (let i = 0; i <= 16; i++) { const u = i / 16; arch.push([cx - cw / 2 + u * cw, y - 2 * s - Math.sin(u * Math.PI) * ch, 0.01]); }
+  const canopy = [...arch, [cx + cw / 2, y + 2 * s, 0.01], [cx - cw / 2, y + 2 * s, 0.01]];
+  c.fillStyle = rgba('#8a7558', 0.9);
+  fillPoly(c, canopy);
+  wash(c, canopy, '#5d4a37', { layers: 8, alpha: 0.1, seed: 303, rough: 0.02 });
+  c.strokeStyle = rgba(INK, 0.45);
+  c.lineWidth = 1.2 * s;
+  for (let k = 1; k < 6; k++) {
+    const u = k / 6, px = cx - cw / 2 + u * cw;
+    c.beginPath(); c.moveTo(px, y - 2 * s - Math.sin(u * Math.PI) * ch); c.lineTo(px, y + 1 * s); c.stroke();
+  }
+  dryStroke(c, arch.map(([a, b]) => [a, b]), 2 * s, INK, { alpha: 0.75, hairs: 2, dry: 0.15, seed: 304 });
+  // fisherman at the stern (right), leaning on a long pole
+  const fx = x + L * 0.32, fy = y - curve(0.82) * 0.4;
+  c.fillStyle = rgba('#2a2420', 0.92);
+  fillPoly(c, [[fx - 7 * s, fy], [fx - 5 * s, fy - 32 * s], [fx + 6 * s, fy - 33 * s], [fx + 8 * s, fy]]);
+  c.beginPath(); c.arc(fx + 0.5 * s, fy - 36 * s, 4.5 * s, 0, Math.PI * 2); c.fill();
+  c.fillStyle = rgba('#b8a27a', 0.95);
+  fillPoly(c, [[fx - 17 * s, fy - 36 * s], [fx + 0.5 * s, fy - 48 * s], [fx + 18 * s, fy - 36 * s]]);
   c.strokeStyle = rgba(INK, 0.8);
-  c.lineWidth = 2 * s;
-  c.beginPath(); c.moveTo(x + 6 * s, y - 28 * s); c.lineTo(x + 60 * s, y + 16 * s); c.stroke();
-  // ripples around the pole
-  c.strokeStyle = rgba('#5d6670', 0.35);
-  c.lineWidth = 1.5;
-  for (let k = 1; k <= 3; k++) { c.beginPath(); c.ellipse(x + 60 * s, y + 16 * s, 12 * k * s, 3 * k * s, 0, 0, Math.PI * 2); c.stroke(); }
+  c.lineWidth = 1.4 * s;
+  c.beginPath(); c.moveTo(fx - 17 * s, fy - 36 * s); c.lineTo(fx + 0.5 * s, fy - 48 * s); c.lineTo(fx + 18 * s, fy - 36 * s); c.closePath(); c.stroke();
+  c.lineWidth = 2.2 * s;
+  c.beginPath(); c.moveTo(fx + 4 * s, fy - 26 * s); c.lineTo(fx + 70 * s, fy + 34 * s); c.stroke();
+  // reflection of the hull and ripples from the pole
+  // mirrored at the waterline (the lowest point of the hull), soft
+  const wl = Math.max(...hull.map(([, b0]) => b0));
+  c.save();
+  c.filter = `blur(${2 * s}px)`;
+  c.fillStyle = rgba('#3b2f26', 0.12);
+  fillPoly(c, hull.map(([a0, b0]) => [a0, 2 * wl - b0 - 3 * s]));
+  c.restore();
+  c.strokeStyle = rgba('#5d6670', 0.3);
+  c.lineWidth = 1.4;
+  for (let k = 1; k <= 3; k++) { c.beginPath(); c.ellipse(fx + 70 * s, fy + 34 * s, 14 * k * s, 3.2 * k * s, 0, 0, Math.PI * 2); c.stroke(); }
 }
 
 function paintGuilin() {
@@ -184,7 +293,7 @@ function paintGuilin() {
   }
   ctx.drawImage(wcv, 0, HZ);
   mist(HZ + 4, 60, '#eef0ef', 101, 0.8);
-  raft(ctx, 760, 900, 1.4);
+  boat(ctx, 760, 905, 1.4);
 }
 
 // ---------- Shanghai ----------
@@ -194,95 +303,174 @@ function paintGuilin() {
 //   Jin Mao: stepped pagoda-like tower with a spire;
 //   Shanghai World Financial Center: tapering slab with a trapezoid opening at the top;
 //   Shanghai Tower: twisting, tapering cylinder, the tallest.
-// Outlines of everything that has windows, so lights land on buildings, not in the sky.
+// Every building is painted like the mountains: an opaque underlay so the sky does not
+// show through, glazes with a slightly ragged edge, the shaded side darker, warm city
+// glow at the foot, then granulation, a few backruns and a broken ink outline.
+
 const lit = new Path2D();
 function addLit(poly) {
   poly.forEach(([x, y], i) => (i ? lit.lineTo(x, y) : lit.moveTo(x, y)));
   lit.closePath();
 }
 
-function towerWash(c, poly, color, seed, alpha = 0.09) {
+function building(c, poly, { color, shade, seed, under = '#3d4459', edge = 0.035, ink = true }) {
   addLit(poly);
-  c.fillStyle = '#2b3140';
+  const xs = poly.map(([x]) => x), ys = poly.map(([, y]) => y);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs), yMin = Math.min(...ys), yMax = Math.max(...ys);
+  c.fillStyle = under;
   fillPoly(c, poly);
-  wash(c, poly, color, { layers: 12, alpha, seed, rough: 0.02 });
+  wash(c, poly.map(([x, y]) => [x, y, edge]), color, { layers: 14, alpha: 0.1, seed });
+  // shaded side: the right part of the building, its own ragged glaze
+  const sx = xMin + (xMax - xMin) * 0.58;
+  c.save();
+  c.beginPath(); poly.forEach(([x, y], i) => (i ? c.lineTo(x, y) : c.moveTo(x, y))); c.closePath(); c.clip();
+  wash(c, [[sx, yMin - 10, 0.05], [xMax + 10, yMin - 10, 0.05], [xMax + 10, yMax, 0.05], [sx + 4, yMax, 0.05]], shade, { layers: 10, alpha: 0.09, seed: seed + 1 });
+  // warm glow of the streets at the foot
+  const gl = c.createLinearGradient(0, yMax - (yMax - yMin) * 0.45, 0, yMax);
+  gl.addColorStop(0, 'rgba(224,183,125,0)');
+  gl.addColorStop(1, 'rgba(224,183,125,0.22)');
+  c.fillStyle = gl;
+  c.fillRect(xMin - 10, yMin, xMax - xMin + 20, yMax - yMin);
+  c.restore();
+  if (ink) {
+    // broken ink outline: each edge a separate one-hair stroke with gaps
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      if (Math.abs(a[1] - b[1]) < 1 && a[1] > yMax - 2) continue; // no line along the ground
+      const pts = [];
+      for (let k = 0; k <= 10; k++) pts.push([a[0] + (b[0] - a[0]) * k / 10, a[1] + (b[1] - a[1]) * k / 10]);
+      dryStroke(c, pts, 1.6, '#1d2130', { alpha: 0.55, hairs: 1, dry: 0.45, seed: seed + 10 + i });
+    }
+  }
+}
+
+// Lit windows in floors: dabs on a grid inside the building, some floors dark.
+function windows(c, poly, { seed, density = 0.35, step = [8, 11] }) {
+  const r = rng(seed), path = new Path2D();
+  poly.forEach(([x, y], i) => (i ? path.lineTo(x, y) : path.moveTo(x, y)));
+  path.closePath();
+  const xs = poly.map(([x]) => x), ys = poly.map(([, y]) => y);
+  for (let y = Math.min(...ys) + 8; y < Math.max(...ys) - 4; y += step[1]) {
+    const floorOn = r() < 0.8;
+    for (let x = Math.min(...xs) + 5; x < Math.max(...xs) - 3; x += step[0]) {
+      if (!floorOn || r() > density || !c.isPointInPath(path, x, y)) continue;
+      c.fillStyle = rgba(r() < 0.75 ? '#e0b77d' : '#f0d4cf', 0.25 + 0.45 * r());
+      c.beginPath(); c.ellipse(x + (r() - 0.5) * 1.5, y, 1.8 + r() * 1.2, 1.3 + r() * 0.6, 0, 0, Math.PI * 2); c.fill();
+    }
+  }
 }
 
 function paintShanghai() {
-  // night sky turning to pre-dawn: deep indigo high, a warm haze low
-  sky('#3b4560', '#8c8597', 760);
-  const HZ = 760, s = 1.0;
-  const c = ctx, r = rng(111);
-  // background mass of buildings in haze
-  for (let i = 0; i < 40; i++) {
-    const x = r() * 1920, w = 30 + r() * 70, h = 60 + r() * 200;
-    const poly = [[x, HZ, 0.01], [x, HZ - h, 0.01], [x + w, HZ - h, 0.01], [x + w, HZ, 0.01]];
-    wash(c, poly, '#5b5f72', { layers: 6, alpha: 0.08, seed: 120 + i, rough: 0.01 });
-    addLit(poly);
+  const HZ = 760;
+  // sky: night indigo high, a pre-dawn haze low, laid as glazes and granulated
+  sky('#3b4560', '#8c8597', HZ);
+  const skc = W.canvas(1920, HZ + 40), sx = skc.getContext('2d');
+  for (let i = 0; i < 4; i++) {
+    const y0 = i * 170 - 40;
+    wash(sx, [[-60, y0, 0.05], [1980, y0 + 30, 0.05], [1980, y0 + 260, 0.08], [-60, y0 + 230, 0.08]], i < 2 ? '#2f3852' : '#7b7290', { layers: 10, alpha: 0.05, seed: 200 + i });
   }
-  mist(HZ - 120, 160, '#9d95a3', 113, 0.6);
-  // Shanghai Tower (twisting): tapering outline with a gentle twist, a spiral seam
-  const st = { x: 1240, w0: 120, w1: 52, h: 640 };
-  const stPoly = [];
-  for (let i = 0; i <= 20; i++) { const u = i / 20, w = st.w0 + (st.w1 - st.w0) * u; stPoly.push([st.x - w / 2 + Math.sin(u * 3) * 6, HZ - u * st.h, 0.005]); }
-  for (let i = 20; i >= 0; i--) { const u = i / 20, w = st.w0 + (st.w1 - st.w0) * u; stPoly.push([st.x + w / 2 + Math.sin(u * 3) * 6, HZ - u * st.h, 0.005]); }
-  towerWash(c, stPoly, '#6f7894', 131);
-  c.strokeStyle = rgba('#c9cad6', 0.35);
-  c.lineWidth = 2;
-  c.beginPath();
-  for (let i = 0; i <= 30; i++) { const u = i / 30, w = st.w0 + (st.w1 - st.w0) * u; c.lineTo(st.x + Math.sin(u * 7) * w * 0.45, HZ - u * st.h); }
-  c.stroke();
+  wash(sx, [[-60, HZ - 220, 0.08], [1980, HZ - 260, 0.08], [1980, HZ + 40, 0.03], [-60, HZ + 40, 0.03]], '#b69aa0', { layers: 12, alpha: 0.05, seed: 210 });
+  // soft, so the bands read as haze and clouds, not as mountain ridges
+  ctx.filter = 'blur(26px)';
+  ctx.drawImage(skc, 0, 0);
+  ctx.filter = 'none';
+
+  const sk = W.canvas(1920, 1080), c = sk.getContext('2d'), r = rng(111);
+  // far mass of buildings in the haze, pale, no outline
+  for (let i = 0; i < 42; i++) {
+    const x = r() * 1920, w = 30 + r() * 70, h = 60 + r() * 210;
+    const poly = [[x, HZ], [x, HZ - h], [x + w, HZ - h], [x + w, HZ]];
+    building(c, poly, { color: '#6a6b80', shade: '#4e5068', seed: 120 + i * 3, under: '#5b5d72', edge: 0.02, ink: false });
+    windows(c, poly, { seed: 400 + i, density: 0.2 });
+  }
+  W.granulate(c, 1920, 1080, 0.2);
+  ctx.drawImage(sk, 0, 0);
+  mist(HZ - 110, 170, '#9d95a3', 113, 0.65);
+
+  const fg = W.canvas(1920, 1080), f = fg.getContext('2d');
+  // Jin Mao: stepped tower with a spire
+  const jm = { x: 1090, h: 440 }, steps = [];
+  for (let k = 0; k < 8; k++) { const y0 = HZ - k * 45, w = 96 - k * 9; steps.push([jm.x - w / 2, y0], [jm.x - w / 2, y0 - 45]); }
+  const jmPoly = [...steps, [jm.x, HZ - jm.h], ...steps.slice().reverse().map(([x, y]) => [2 * jm.x - x, y])];
+  building(f, jmPoly, { color: '#6f6f86', shade: '#3f4258', seed: 133 });
+  windows(f, jmPoly, { seed: 501, density: 0.4, step: [7, 9] });
+  // Shanghai Tower: tapering, twisting, with a spiral seam
+  const st = { x: 1240, w0: 120, w1: 52, h: 640 }, stL = [], stR = [];
+  for (let i = 0; i <= 20; i++) {
+    const u = i / 20, w = st.w0 + (st.w1 - st.w0) * u;
+    stL.push([st.x - w / 2 + Math.sin(u * 3) * 6, HZ - u * st.h]);
+    stR.push([st.x + w / 2 + Math.sin(u * 3) * 6, HZ - u * st.h]);
+  }
+  const stPoly = [...stL, ...stR.reverse()];
+  building(f, stPoly, { color: '#6c7a93', shade: '#3d4a62', seed: 131 });
+  windows(f, stPoly, { seed: 502, density: 0.32, step: [7, 10] });
+  const seam = [];
+  for (let i = 0; i <= 30; i++) { const u = i / 30, w = st.w0 + (st.w1 - st.w0) * u; seam.push([st.x + Math.sin(u * 3) * 6 + Math.sin(u * 7) * w * 0.45, HZ - u * st.h]); }
+  dryStroke(f, seam, 1.8, '#c9cad6', { alpha: 0.4, hairs: 1, dry: 0.3, seed: 509 });
   // SWFC: slab tapering to a top with a trapezoid opening
   const sw = { x: 1420, w0: 130, w1: 40, h: 520 };
-  const swPoly = [[sw.x - sw.w0 / 2, HZ, 0.005], [sw.x - sw.w1 / 2, HZ - sw.h, 0.005], [sw.x + sw.w1 / 2, HZ - sw.h, 0.005], [sw.x + sw.w0 / 2, HZ, 0.005]];
-  towerWash(c, swPoly, '#7a809a', 132);
-  const hy = HZ - sw.h + 26;
-  c.fillStyle = '#8c8597';
-  fillPoly(c, [[sw.x - 15, hy], [sw.x - 11, hy + 26], [sw.x + 11, hy + 26], [sw.x + 15, hy]]);
-  // Jin Mao: stepped tower with a spire
-  const jm = { x: 1090, h: 440 };
-  const steps = [];
-  for (let k = 0; k < 8; k++) { const y0 = HZ - k * 45, w = 96 - k * 9; steps.push([jm.x - w / 2, y0], [jm.x - w / 2, y0 - 45]); }
-  const jmPoly = [...steps.map(([x, y]) => [x, y, 0.005]), [jm.x, HZ - jm.h, 0.005], ...steps.slice().reverse().map(([x, y]) => [2 * jm.x - x, y, 0.005])];
-  towerWash(c, jmPoly, '#6c7088', 133);
-  // Oriental Pearl: legs, big sphere, shaft, small sphere, top, spire
+  const swPoly = [[sw.x - sw.w0 / 2, HZ], [sw.x - sw.w1 / 2, HZ - sw.h], [sw.x + sw.w1 / 2, HZ - sw.h], [sw.x + sw.w0 / 2, HZ]];
+  building(f, swPoly, { color: '#77809a', shade: '#454d66', seed: 132 });
+  windows(f, swPoly, { seed: 503, density: 0.32, step: [7, 10] });
+  const hy = HZ - sw.h + 22, hole = [[sw.x - 17, hy], [sw.x - 12, hy + 36], [sw.x + 12, hy + 36], [sw.x + 17, hy]];
+  f.save();
+  f.globalCompositeOperation = 'destination-out';
+  fillPoly(f, hole);
+  f.restore();
+  dryStroke(f, [...hole, hole[0]], 1.6, '#1d2130', { alpha: 0.6, hairs: 1, dry: 0.1, seed: 510 });
+  // Oriental Pearl: tapered legs and shaft, painted spheres with a light side
   const op = { x: 640 };
-  c.strokeStyle = rgba('#2b3140', 0.95);
-  c.lineWidth = 12;
-  for (const dx of [-60, 0, 60]) { c.beginPath(); c.moveTo(op.x + dx, HZ); c.lineTo(op.x + dx * 0.15, HZ - 230); c.stroke(); }
-  c.lineWidth = 16;
-  c.beginPath(); c.moveTo(op.x, HZ - 200); c.lineTo(op.x, HZ - 470); c.stroke();
-  c.lineWidth = 6;
-  c.beginPath(); c.moveTo(op.x, HZ - 470); c.lineTo(op.x, HZ - 600); c.stroke();
-  for (const [y, rad, col] of [[HZ - 230, 62, '#8f6f86'], [HZ - 430, 36, '#8f6f86'], [HZ - 505, 14, '#8f6f86']]) {
-    const circle = Array.from({ length: 14 }, (_, i) => [op.x + Math.cos(i / 14 * 6.283) * rad, y + Math.sin(i / 14 * 6.283) * rad, 0.02]);
-    c.fillStyle = '#2b3140';
-    fillPoly(c, circle);
-    wash(c, circle, col, { layers: 14, alpha: 0.12, seed: 140 + rad });
+  const pole = (a, b, w0, w1, sd) => {
+    const pts = [];
+    for (let k = 0; k <= 10; k++) pts.push([a[0] + (b[0] - a[0]) * k / 10, a[1] + (b[1] - a[1]) * k / 10]);
+    const poly = taper(pts, (u) => w0 + (w1 - w0) * u).map(([x, y]) => [x, y, 0.01]);
+    f.fillStyle = '#2b3140';
+    fillPoly(f, poly);
+    wash(f, poly, '#55506a', { layers: 8, alpha: 0.12, seed: sd, rough: 0.005 });
+  };
+  for (const [dx, sd] of [[-62, 601], [62, 602]]) pole([op.x + dx, HZ], [op.x + dx * 0.12, HZ - 235], 16, 9, sd);
+  pole([op.x, HZ], [op.x, HZ - 235], 18, 14, 603);
+  pole([op.x, HZ - 235], [op.x, HZ - 470], 20, 14, 604);
+  pole([op.x, HZ - 470], [op.x, HZ - 600], 6, 2, 605);
+  for (const [y, rad, sd] of [[HZ - 232, 62, 611], [HZ - 432, 36, 612], [HZ - 506, 14, 613]]) {
+    const circle = Array.from({ length: 16 }, (_, i) => [op.x + Math.cos(i / 16 * 6.283) * rad, y + Math.sin(i / 16 * 6.283) * rad, 0.02]);
+    f.fillStyle = '#3a3346';
+    fillPoly(f, circle);
+    wash(f, circle, '#a0566e', { layers: 16, alpha: 0.12, seed: sd });
+    // light side: lift pigment on the upper left
+    f.save();
+    f.globalCompositeOperation = 'destination-out';
+    f.filter = `blur(${rad * 0.25}px)`;
+    f.fillStyle = 'rgba(0,0,0,0.35)';
+    f.beginPath(); f.ellipse(op.x - rad * 0.35, y - rad * 0.35, rad * 0.45, rad * 0.35, -0.6, 0, Math.PI * 2); f.fill();
+    f.restore();
+    f.fillStyle = rgba('#f0d4cf', 0.18);
+    f.beginPath(); f.ellipse(op.x - rad * 0.35, y - rad * 0.35, rad * 0.35, rad * 0.25, -0.6, 0, Math.PI * 2); f.fill();
+    dryStroke(f, [...circle, circle[0]].map(([x, yy]) => [x, yy]), 1.8, '#1d2130', { alpha: 0.5, hairs: 1, dry: 0.35, seed: sd + 20 });
+    addLit(circle);
   }
-  // lit windows: muted warm watercolour dots, more of them low
+  windows(f, Array.from({ length: 16 }, (_, i) => [op.x + Math.cos(i / 16 * 6.283) * 55, HZ - 232 + Math.sin(i / 16 * 6.283) * 55]), { seed: 504, density: 0.15, step: [9, 9] });
+  W.granulate(f, 1920, 1080, 0.18);
+  W.blooms(f, [[1090, HZ - 300], [1240, HZ - 420], [1420, HZ - 320], [640, HZ - 260]], 520, 5);
+  ctx.drawImage(fg, 0, 0);
+
+  // the Huangpu: dark water glazes, broken reflections of the lights, light streaks
+  const wpoly = [[-40, HZ, 0.01], [1960, HZ, 0.01], [1960, 1100, 0.03], [-40, 1100, 0.03]];
+  ctx.fillStyle = '#434a60';
+  fillPoly(ctx, wpoly);
+  wash(ctx, wpoly, '#2f3650', { layers: 14, alpha: 0.08, seed: 160 });
   const r3 = rng(150);
-  for (let i = 0; i < 2600; i++) {
-    const x = r3() * 1920, y = HZ - Math.pow(r3(), 1.5) * 640;
-    if (!c.isPointInPath(lit, x, y)) continue;
-    c.fillStyle = rgba(r3() < 0.7 ? '#e0b77d' : '#f0d4cf', 0.18 + 0.35 * r3());
-    c.beginPath(); c.ellipse(x, y, 1.5 + r3() * 2.5, 1.2 + r3() * 1.6, 0, 0, Math.PI * 2); c.fill();
-  }
-  // the Huangpu: dark water, long vertical reflections of the lights
-  const wpoly = [[0, HZ, 0.01], [1920, HZ, 0.01], [1920, 1080, 0.03], [0, 1080, 0.03]];
-  wash(c, wpoly, '#3f475c', { layers: 16, alpha: 0.1, seed: 160 });
-  // reflections: short broken horizontal dabs stacked under the bright towers
-  for (const [cx, spread] of [[640, 70], [1090, 40], [1240, 50], [1420, 50], [900, 260], [1700, 160]]) {
+  for (const [cx, spread] of [[640, 70], [1090, 40], [1240, 50], [1420, 50], [900, 260], [1700, 160], [300, 200]]) {
     for (let i = 0; i < 46; i++) {
       const y = HZ + 8 + Math.pow(r3(), 1.3) * 230, x = cx + r3.gauss() * spread * (0.4 + (y - HZ) / 300);
       const len = 6 + r3() * 26;
-      c.fillStyle = rgba(r3() < 0.7 ? '#d9b07a' : '#e9cfc8', 0.06 + 0.16 * r3() * (1 - (y - HZ) / 300));
-      c.beginPath(); c.ellipse(x, y, len, 1.4, 0, 0, Math.PI * 2); c.fill();
+      ctx.fillStyle = rgba(r3() < 0.7 ? '#d9b07a' : '#e9cfc8', 0.06 + 0.16 * r3() * (1 - (y - HZ) / 300));
+      ctx.beginPath(); ctx.ellipse(x, y, len, 1.4, 0, 0, Math.PI * 2); ctx.fill();
     }
   }
   for (let i = 0; i < 50; i++) {
     const y = HZ + 10 + Math.pow(r3(), 1.4) * 300, x = r3() * 1920, len = 60 + r3() * 260;
-    dryStroke(c, [[x, y], [x + len / 2, y + 1], [x + len, y]], 2 + r3() * 2, '#9aa0b4', { alpha: 0.25, hairs: 2, dry: 0.5, seed: 170 + i });
+    dryStroke(ctx, [[x, y], [x + len / 2, y + 1], [x + len, y]], 2 + r3() * 2, '#9aa0b4', { alpha: 0.22, hairs: 2, dry: 0.5, seed: 170 + i });
   }
   mist(HZ, 70, '#9a93a6', 115, 0.5);
 }
