@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Проба: финал, поза B</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; }
+  #stage svg { position: absolute; left: 0; top: 0; display: block; }
+  #ui { position: fixed; left: 12px; right: 12px; bottom: 10px; display: flex; gap: 10px; align-items: center;
+        font: 14px/1 "Segoe UI", sans-serif; color: #ece6dc; }
+  #ui input { flex: 1; }
+  body.render #ui { display: none; }
+</style>
+</head>
+<body>
+<div id="stage"><svg id="back" width="1920" height="1080" viewBox="0 0 1920 1080"></svg><svg id="front" width="1920" height="1080" viewBox="0 0 1920 1080"></svg></div>
+<div id="ui"><button id="play">▶</button><input id="scrub" type="range" min="0" max="6" step="0.01" value="0"><span id="time">0.00</span></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/ink.js"></script>
+<script src="../../shared/rig.js"></script>
+<script src="../../characters/rita/rig-art.js"></script>
+<script>
+// Pose B from the generator (characters/rita/art/pose-b.webp) in the finale setting:
+//   0.0-6.0  dawn, slow crane up; steady wind in hair, sash, sleeves and hem, breath
+//   3.0-3.5  she turns her head over the shoulder (head region of pose-b-turn.webp)
+// ?debug shows the mesh and the bent regions; ?debug=turn also the swapped region.
+const { ease, lerp, progress } = DH;
+const { C, defs, layer, landscape, rock, pine, paper } = DH.ink;
+const DURATION = 6;
+const params = new URLSearchParams(location.search);
+const debug = params.has('debug') ? (params.get('debug') || true) : false;
+const back = document.getElementById('back'), front = document.getElementById('front');
+
+// The figure is about 1060 px of the 1116 px image; ~665 scene units as in videos/probe-rita.
+const RITA = { x: 1420, y: 1012, h: 700 };
+
+let rig;
+function renderAt(t) {
+  t = Math.min(Math.max(t, 0), DURATION - 1e-6);
+  const k = ease.out(progress(t, 0, DURATION));
+  // slow crane up: the horizon drifts down, the sky opens above her
+  const cam = { x: lerp(-20, 10, k), y: lerp(40, -25, k), zoom: lerp(1.05, 1.0, k) };
+  back.innerHTML = defs + landscape(cam, t, { horizon: 700, dawn: true, sun: { x: 900, y: 590 } }) +
+    `<g transform="${layer(cam, 1)}">${rock(RITA.x, RITA.y - 8, 620)}</g>`;
+  front.innerHTML = `<g transform="${layer(cam, 1.7)}">${pine(-60, -30, 1.3, t, true)}</g>${paper}`;
+  // the turned head fades in over the head region and stays; the rest is always pose B
+  const turn = ease.draw(progress(t, 3.0, 3.5));
+  rig.drawAt({ t, swap: { to: 'turn', k: turn }, debug }, { cam, ...RITA });
+}
+
+DH.rig.load(DH.ritaArt.b, { base: '../../', paper: C.paper }).then((r) => {
+  rig = r;
+  front.before(rig.canvas);
+  window.DURATION = DURATION;
+  window.renderAt = renderAt;
+  startPreview();
+}).catch((e) => {
+  document.body.insertAdjacentHTML('afterbegin', `<pre style="color:#f88;font:16px monospace">${e.message}\nОткрой страницу через http (см. README).</pre>`);
+  throw e;
+});
+
+// Preview UI only: the renderer calls renderAt(t) directly.
+function startPreview() {
+  if (params.has('render')) { document.body.classList.add('render'); return; }
+  const stage = document.getElementById('stage');
+  const fit = () => { stage.style.transform = `scale(${Math.min(innerWidth / 1920, (innerHeight - 40) / 1080)})`; };
+  addEventListener('resize', fit); fit();
+  const scrub = document.getElementById('scrub'), label = document.getElementById('time'), btn = document.getElementById('play');
+  let playing = false, startClock = 0, startT = 0;
+  const show = (t) => { renderAt(t); scrub.value = t; label.textContent = t.toFixed(2); };
+  scrub.oninput = () => { playing = false; btn.textContent = '▶'; show(+scrub.value); };
+  btn.onclick = () => { playing = !playing; btn.textContent = playing ? '❚❚' : '▶'; startClock = performance.now(); startT = +scrub.value; if (playing) tick(); };
+  function tick() { if (!playing) return; show((startT + (performance.now() - startClock) / 1000) % DURATION); requestAnimationFrame(tick); }
+  show(+(params.get('t') || 0));
+}
+</script>
+</body>
+</html>
