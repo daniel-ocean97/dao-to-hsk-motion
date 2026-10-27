@@ -49,7 +49,7 @@
 | Роль | Шрифт |
 |---|---|
 | Заголовки, «Dao to HSK» | Cormorant Garamond |
-| Подписи, служебный текст | Onest |
+| Подписи, служебный текст, пиньинь | Onest |
 | Иероглифы | Noto Serif SC |
 
 Все три — Google Fonts под лицензией SIL Open Font License: можно

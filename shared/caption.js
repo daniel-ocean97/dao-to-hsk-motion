@@ -3,20 +3,21 @@
 //   in   the characters come through one after another like ink soaking into wet paper:
 //        a soft bleed first, then the sharp glyph; the pinyin follows;
 //   out  the wind carries it off: it stretches, blurs along the way and melts.
-// Fonts are local (fonts/), so a frame never depends on the network. Wait for
+// Pinyin is set in Onest, as on the course site: its tone marks are clear at small
+// sizes (Cormorant draws the grave and the caron as thin ticks). Fonts are local
+// (fonts/), so a frame never depends on the network. Wait for
 // DH.caption.ready before the first frame: canvas text drawn before the font has loaded
 // silently falls back to another font.
 (function (g) {
   const DH = g.DH;
   const { clamp, progress, ease } = DH;
 
-  const HANZI_FONT = 'DH Noto Serif SC', PINYIN_FONT = 'DH Cormorant Garamond';
+  const HANZI_FONT = 'DH Noto Serif SC', PINYIN_FONT = 'DH Onest';
   const base = new URL('../fonts/', document.currentScript.src);
   const css = document.createElement('style');
   css.textContent = `
     @font-face { font-family: "${HANZI_FONT}"; src: url("${new URL('NotoSerifSC-subset.ttf', base)}"); font-weight: 200 900; }
-    @font-face { font-family: "${PINYIN_FONT}"; src: url("${new URL('CormorantGaramond.ttf', base)}"); font-weight: 300 700; }
-    @font-face { font-family: "${PINYIN_FONT}"; src: url("${new URL('CormorantGaramond-Italic.ttf', base)}"); font-weight: 300 700; font-style: italic; }`;
+    @font-face { font-family: "${PINYIN_FONT}"; src: url("${new URL('Onest.ttf', base)}"); font-weight: 100 900; }`;
   document.head.appendChild(css);
 
   // A rough, slightly bleeding ink edge for the glyphs (seeded, so frames repeat).
@@ -30,7 +31,7 @@
 
   const ready = Promise.all([
     document.fonts.load(`500 100px "${HANZI_FONT}"`, '道'),
-    document.fonts.load(`italic 500 40px "${PINYIN_FONT}"`, 'dào'),
+    document.fonts.load(`500 40px "${PINYIN_FONT}"`, 'dào'),
   ]).then(() => {
     if (!document.fonts.check(`500 100px "${HANZI_FONT}"`, '道')) throw new Error('caption fonts did not load');
   });
@@ -43,7 +44,7 @@
 
   // Prepare a caption once: every glyph and the pinyin as separate images. The caption is centred on (0, 0) = the middle of
   // the baseline gap between characters and pinyin.
-  function make({ hanzi, pinyin, size = 140, ink = '#24170f', ink2 = '#3e3a36', pinyinSize = size * 0.36,
+  function make({ hanzi, pinyin, size = 140, ink = '#24170f', ink2 = '#3e3a36', pinyinSize = size * 0.3,
     weight = 500, gap = size * 0.22, edge = true }) {
     const chars = [...hanzi];
     const step = size * 1.08, pad = Math.ceil(size * 0.25);
@@ -64,7 +65,7 @@
     // ends about 0.12 em under the baseline, so the ink ends at pad + 1.1 * size
     const slots = chars.map((_, i) => [-width / 2 + i * step, -gap / 2 - pad - size * 1.1]);
 
-    const pf = `italic 500 ${pinyinSize}px "${PINYIN_FONT}"`;
+    const pf = `500 ${pinyinSize}px "${PINYIN_FONT}"`;
     const meas = canvas(1, 1).getContext('2d');
     meas.font = pf;
     const pw = meas.measureText(pinyin).width + 2 * pad, ph = pinyinSize * 1.5 + pad;
@@ -74,10 +75,14 @@
     px.textAlign = 'center';
     px.textBaseline = 'alphabetic';
     px.fillText(pinyin, pw / 2, pinyinSize * 1.05 + pad / 2);
-    // the top of the accents is about 0.75 em above the pinyin baseline
-    const pySlot = [-pw / 2, gap / 2 - (pinyinSize * 0.3 + pad / 2)];
+    // the top of the tone marks is about 0.8 em above the pinyin baseline
+    const pySlot = [-pw / 2, gap / 2 - (pinyinSize * 0.25 + pad / 2)];
 
-    return { chars, glyphs, slots, py, pySlot, size };
+    // bounds of the caption at rest, and its foot: just under the pinyin descenders
+    const box = [Math.min(slots[0][0], pySlot[0]), slots[0][1],
+      Math.max(slots.at(-1)[0] + gw, pySlot[0] + pw), pySlot[1] + ph];
+    const foot = pySlot[1] + pinyinSize * 1.35 + pad / 2;
+    return { chars, glyphs, slots, py, pySlot, size, box, foot };
   }
 
   // Timing of a caption shown at t0 and blown away from tOut (seconds, scene time).
@@ -143,5 +148,37 @@
     c.restore();
   }
 
-  DH.caption = { ready, make, draw, CHAR_GAP, CHAR_IN, PY_DELAY, PY_IN, OUT };
+  // The caption mirrored in water: drawn into a buffer, flipped about the water line
+  // (`below` px under its foot) and laid down in thin rows that waver and fade with depth.
+  const buf = canvas(16, 16), bx = buf.getContext('2d');
+  function reflect(c, cap, t, o, { below = 14, alpha = 0.3, waver = 3, depth = 260 } = {}) {
+    const wind = o.wind || [520, -60], m = 30;
+    const [x0, y0, x1, y1] = cap.box;
+    // room for the wind: the glyphs fly up to wind * (1 + stretch) away
+    const ox = m - x0 - Math.min(0, wind[0] * 1.7), oy = m - y0 - Math.min(0, wind[1] * 1.2);
+    const w = Math.ceil(x1 - x0 + Math.abs(wind[0]) * 1.7 + 2 * m), h = Math.ceil(y1 - y0 + Math.abs(wind[1]) * 1.2 + 2 * m);
+    if (buf.width < w) buf.width = w;
+    if (buf.height < h) buf.height = h;
+    bx.setTransform(1, 0, 0, 1, 0, 0);
+    bx.clearRect(0, 0, buf.width, buf.height);
+    draw(bx, cap, t, { ...o, x: ox, y: oy });
+    bx.filter = 'none';
+    bx.globalAlpha = 1;
+    const line = cap.foot + below; // water line, caption coordinates
+    c.save();
+    c.filter = 'blur(1.5px)';
+    for (let yb = 0, row = 3; yb < h; yb += row) {
+      const ly = yb - oy; // caption y of this buffer row
+      const dist = line - ly; // the row is this far above the water line, its image as far below
+      if (dist <= 0) continue;
+      const fade = 1 - dist / depth;
+      if (fade <= 0) continue;
+      const dx = Math.sin(dist * 0.11 + t * 2.4) * (0.5 + waver * dist / depth);
+      c.globalAlpha = alpha * fade;
+      c.drawImage(buf, 0, yb, w, row, o.x - ox + dx, o.y + line + dist - row, w, row);
+    }
+    c.restore();
+  }
+
+  DH.caption = { ready, make, draw, reflect, CHAR_GAP, CHAR_IN, PY_DELAY, PY_IN, OUT };
 })(window);

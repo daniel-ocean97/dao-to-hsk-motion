@@ -2,10 +2,11 @@
 
 Noto Serif SC holds ~30 000 characters (25 MB). The videos need a handful, so the
 committed fonts/NotoSerifSC-subset.ttf keeps only the Chinese characters found in
-videos/ and shared/. Latin text, pinyin included, is set in Cormorant Garamond. After
+videos/ and shared/. Latin text is set in Onest (pinyin) or Cormorant Garamond. After
 adding a new character to a scene, run this script again and commit the new subset.
 
-Cormorant Garamond is small and is committed whole; the script only checks it is there.
+Onest and Cormorant Garamond are small and committed whole; the script only checks
+they are there.
 
 The full fonts are downloaded once into out/fonts-src/ (not in git) and checked by
 SHA-256. Subsetting uses fonttools through uvx, so it is not a project dependency.
@@ -83,7 +84,7 @@ def main() -> None:
         check=True,
     )
     print(f"{out.relative_to(ROOT)}: {out.stat().st_size // 1024} KB")
-    for name in ("CormorantGaramond.ttf", "CormorantGaramond-Italic.ttf"):
+    for name in ("Onest.ttf", "CormorantGaramond.ttf", "CormorantGaramond-Italic.ttf"):
         if not (FONTS / name).exists():
             sys.exit(f"fonts/{name} is missing")
 

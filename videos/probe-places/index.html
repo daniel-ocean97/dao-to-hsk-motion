@@ -504,6 +504,7 @@ function frameGuilin(t) {
     out.drawImage(Wt.c, 0, y, LW, 3, 0, 0, LW, 3);
   }
   show('mistB', cam, 1, -((t * 16) % 200));
+  caption(cam, t); // over the water, the boat passes in front
   const B = LAYERS.boat, bx = DH.lerp(60, -110, t / DURATION), by = Math.sin(t * 2.1) * 1.6;
   place(B.c, LX + bx, LY + by, cam, B.p);
   const zb = 1 + (cam.zoom - 1) * B.p;
@@ -782,6 +783,7 @@ function frameShanghai(t) {
   const on = (i) => smooth(DH.progress(t, 0.1 + i * 0.32, 0.55 + i * 0.32)) * (1 - 0.4 * dawn);
   show('sky', cam);
   show('skyDawn', cam, dawn);
+  caption(cam, t); // in the sky, behind the towers
   show('city', cam);
   for (let i = 0; i < NB; i++) show('win' + i, cam, i === 0 ? Math.max(0.6, on(0)) : on(i));
   out.globalCompositeOperation = 'screen';
@@ -806,6 +808,12 @@ function frameShanghai(t) {
 // with a little parallax: it is in the scene, not glued to the screen.
 const CAPTIONS = {
   wall: { hanzi: '长城', pinyin: 'Chángchéng', x: 400, y: 250, p: 0.35, t0: 0.15, tOut: 2.05, wind: [560, -70] },
+  // low over the river on the right (the boat is on the left), mirrored in the water
+  guilin: { hanzi: '桂林', pinyin: 'Guìlín', x: 1440, y: 770, p: 0.8, t0: 0.15, tOut: 2.05, wind: [560, -30],
+    reflect: { below: 16, alpha: 0.3, waver: 4, depth: 240 } },
+  // light ink in the night sky left of the Pearl, behind the towers
+  shanghai: { hanzi: '上海', pinyin: 'Shànghǎi', x: 330, y: 300, p: 0.35, t0: 0.15, tOut: 2.05, wind: [560, -70],
+    ink: '#f1e8da', ink2: '#ddd3c4' },
 };
 let CAP = null;
 function caption(cam, t) {
@@ -814,6 +822,7 @@ function caption(cam, t) {
   const z = 1 + (cam.zoom - 1) * o.p;
   out.setTransform(z, 0, 0, z, 960 + z * (-960 - cam.x * o.p), 540 + z * (-540 - cam.y * o.p));
   DH.caption.draw(out, CAP, t, o);
+  if (o.reflect) DH.caption.reflect(out, CAP, t, o, o.reflect);
   out.filter = 'none';
   out.globalAlpha = 1;
 }

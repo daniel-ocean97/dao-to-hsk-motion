@@ -1,11 +1,13 @@
 # Шрифты
 
 Шрифты бренда (`docs/brand.md`) лежат здесь, чтобы кадр не зависел от интернета.
-Подключает их `shared/caption.js`.
+Подписи (`shared/caption.js`): иероглифы — Noto Serif SC, пиньинь — Onest, как на
+сайте курса. Cormorant Garamond — для «Dao to HSK» в финале.
 
 | Файл | Шрифт | Автор | Источник | Лицензия | Дата |
 |---|---|---|---|---|---|
 | `NotoSerifSC-subset.ttf` | Noto Serif SC (только знаки из роликов) | Google, Adobe | [google/fonts](https://github.com/google/fonts/tree/main/ofl/notoserifsc) | SIL OFL 1.1, `OFL-NotoSerifSC.txt` | 2026-10-27 |
+| `Onest.ttf` | Onest (пиньинь) | The Onest Project Authors | [google/fonts](https://github.com/google/fonts/tree/main/ofl/onest) | SIL OFL 1.1, `OFL-Onest.txt` | 2026-10-27 |
 | `CormorantGaramond.ttf`, `CormorantGaramond-Italic.ttf` | Cormorant Garamond | Christian Thalmann (Catharsis Fonts) | [google/fonts](https://github.com/google/fonts/tree/main/ofl/cormorantgaramond) | SIL OFL 1.1, `OFL-CormorantGaramond.txt` | 2026-10-27 |
 
 OFL разрешает коммерческое использование, в том числе в видео на YouTube, и
