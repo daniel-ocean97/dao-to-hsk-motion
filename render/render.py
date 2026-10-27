@@ -11,6 +11,7 @@ Examples:
     uv run render/render.py videos/probe-rita/index.html
     uv run render/render.py videos/probe-rita/index.html --stills 1.0 4.5
     uv run render/render.py videos/probe-rita/index.html --audio music/track.wav
+    uv run render/render.py videos/probe-places/index.html --query place=wall --name place-wall
 """
 
 import argparse
@@ -70,13 +71,13 @@ def launch(p):
     return p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
 
 
-def render_frames(html: Path, frames_dir: Path, fps: int, times: list[float] | None) -> list[Path]:
+def render_frames(html: Path, frames_dir: Path, fps: int, times: list[float] | None, query: str = "") -> list[Path]:
     frames_dir.mkdir(parents=True, exist_ok=True)
     written = []
     with sync_playwright() as p, serve() as url:
         browser = launch(p)
         page = browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
-        page.goto(url(html) + "?render")
+        page.goto(url(html) + "?render" + (f"&{query}" if query else ""), timeout=180_000)
         # scenes may paint their layers for a while before they are ready
         page.wait_for_function("typeof window.renderAt === 'function'", timeout=180_000)
         duration = page.evaluate("window.DURATION")
@@ -116,19 +117,20 @@ def main() -> None:
     ap.add_argument("--name", help="output name (default: scene folder name)")
     ap.add_argument("--stills", type=float, nargs="+", help="render only these times as PNG")
     ap.add_argument("--audio", type=Path, help="audio file to mux as AAC")
+    ap.add_argument("--query", default="", help="extra URL parameters for the scene, e.g. place=wall")
     args = ap.parse_args()
 
     name = args.name or args.html.resolve().parent.name
     out_dir = ROOT / "out" / name
     if args.stills:
-        render_frames(args.html, out_dir / "stills", args.fps, args.stills)
+        render_frames(args.html, out_dir / "stills", args.fps, args.stills, args.query)
         print(f"stills -> {out_dir / 'stills'}")
         return
 
     frames_dir = out_dir / "frames"
     if frames_dir.exists():
         shutil.rmtree(frames_dir)
-    render_frames(args.html, frames_dir, args.fps, None)
+    render_frames(args.html, frames_dir, args.fps, None, args.query)
     out_mp4 = out_dir / f"{name}.mp4"
     assemble(frames_dir, args.fps, out_mp4, args.audio)
     print(f"video -> {out_mp4}" + ("" if args.audio else "  (no audio track)"))
