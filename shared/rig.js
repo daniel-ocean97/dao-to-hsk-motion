@@ -60,9 +60,38 @@
   const invert = (m) => m.map((v) => 1 - v);
   const erode = (m, w, h, r) => invert(dilate(invert(m), w, h, r));
 
-  // Alpha of the figure: pixels that differ from the paper, gaps up to 2*close px
-  // bridged, everything the outer paper cannot reach is inside. solid (optional)
-  // marks pixels that are inside anyway: lit paper with no outline around it.
+  // Pixels of pass reachable from the seed indices (4-connected).
+  function flood(pass, w, h, seeds) {
+    const reached = new Uint8Array(w * h), stack = new Int32Array(w * h);
+    let n = 0;
+    const visit = (i) => { if (pass[i] && !reached[i]) { reached[i] = 1; stack[n++] = i; } };
+    seeds.forEach(visit);
+    while (n) {
+      const i = stack[--n], x = i % w;
+      if (x > 0) visit(i - 1);
+      if (x < w - 1) visit(i + 1);
+      if (i >= w) visit(i - w);
+      if (i < (h - 1) * w) visit(i + w);
+    }
+    return reached;
+  }
+
+  // Inside = what the outer paper cannot reach once gaps up to 2*r px are bridged.
+  function enclosed(ink, w, h, r, solid) {
+    const wall = erode(dilate(ink, w, h, r), w, h, r);
+    if (solid) for (let i = 0; i < w * h; i++) wall[i] |= solid[i];
+    const border = [];
+    for (let x = 0; x < w; x++) border.push(x, (h - 1) * w + x);
+    for (let y = 0; y < h; y++) border.push(y * w, y * w + w - 1);
+    return invert(flood(invert(wall), w, h, border));
+  }
+
+  // Alpha of the figure: pixels that differ from the paper and what they enclose.
+  // A tight closing follows thin strands of hair. A wide one (gaps up to 2*close px)
+  // also seals breaks in a faint outline, but would fill the gaps between strands
+  // with paper. So the wide fill is kept only where it is thicker than 2*close px:
+  // lit areas of the dress stay, slivers of paper between wisps go.
+  // solid (optional) marks pixels that are inside anyway.
   function silhouette(d, w, h, bg, threshold, close, solid) {
     const ink = new Uint8Array(w * h);
     for (let i = 0; i < w * h; i++) {
@@ -70,21 +99,12 @@
       const diff = Math.max(Math.abs(d[k] - bg[0]), Math.abs(d[k + 1] - bg[1]), Math.abs(d[k + 2] - bg[2]));
       ink[i] = diff > threshold ? 1 : 0;
     }
-    const wall = erode(dilate(ink, w, h, close), w, h, close);
-    if (solid) for (let i = 0; i < w * h; i++) wall[i] |= solid[i];
-    // flood the outer paper from the border
-    const outside = new Uint8Array(w * h), stack = new Int32Array(w * h);
-    let n = 0;
-    const seed = (i) => { if (!wall[i] && !outside[i]) { outside[i] = 1; stack[n++] = i; } };
-    for (let x = 0; x < w; x++) { seed(x); seed((h - 1) * w + x); }
-    for (let y = 0; y < h; y++) { seed(y * w); seed(y * w + w - 1); }
-    while (n) {
-      const i = stack[--n], x = i % w;
-      if (x > 0) seed(i - 1);
-      if (x < w - 1) seed(i + 1);
-      if (i >= w) seed(i - w);
-      if (i < (h - 1) * w) seed(i + w);
-    }
+    const tight = enclosed(ink, w, h, 2, solid), wide = enclosed(ink, w, h, close, solid);
+    const extra = wide.map((v, i) => v & (1 - tight[i]));
+    const core = erode(extra, w, h, close), seeds = [];
+    for (let i = 0; i < w * h; i++) if (core[i]) seeds.push(i);
+    const kept = flood(extra, w, h, seeds);
+    const outside = tight.map((v, i) => 1 - (v | kept[i]));
     // soft 3x3 edge
     const a = new Uint8ClampedArray(w * h);
     for (let y = 0; y < h; y++) {
@@ -103,7 +123,28 @@
     return a;
   }
 
+  // Regions rasterised to a 0..255 mask; edges blurred over about +-feather px when soft.
+  function polyMask(regions, w, h, soft) {
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff';
+    for (const { poly, feather } of regions) {
+      ctx.filter = soft ? `blur(${feather / 2}px)` : 'none';
+      ctx.beginPath();
+      poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.closePath();
+      ctx.fill();
+    }
+    const md = ctx.getImageData(0, 0, w, h).data, m = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) m[i] = md[i * 4 + 3];
+    return m;
+  }
+
   // Image -> ImageData with the figure cut out and the art's paper tinted to the scene paper.
+  // opt.solid: regions that are inside anyway (lit paper with no outline around it).
+  // opt.soft: regions where alpha follows the density of paint instead of the outline:
+  // fine strands of hair, where paper between the strands must turn transparent.
   function cutOut(im, opt) {
     const w = im.naturalWidth, h = im.naturalHeight;
     const cv = document.createElement('canvas');
@@ -112,28 +153,25 @@
     ctx.drawImage(im, 0, 0);
     const data = ctx.getImageData(0, 0, w, h), d = data.data;
     const bg = borderColor(d, w, h), paper = hexRgb(opt.paper);
-    let solid = null;
-    if (opt.solid && opt.solid.length) {
-      const m = document.createElement('canvas');
-      m.width = w; m.height = h;
-      const mc = m.getContext('2d', { willReadFrequently: true });
-      mc.fillStyle = '#fff';
-      for (const poly of opt.solid) {
-        mc.beginPath();
-        poly.forEach(([x, y], i) => (i ? mc.lineTo(x, y) : mc.moveTo(x, y)));
-        mc.closePath();
-        mc.fill();
-      }
-      const md = mc.getImageData(0, 0, w, h).data;
-      solid = new Uint8Array(w * h);
-      for (let i = 0; i < w * h; i++) solid[i] = md[i * 4 + 3] > 127 ? 1 : 0;
-    }
+    const solid = opt.solid && opt.solid.length ? polyMask(opt.solid, w, h, false).map((v) => (v > 127 ? 1 : 0)) : null;
+    const soft = opt.soft && opt.soft.length ? polyMask(opt.soft, w, h, true) : null;
     const alpha = silhouette(d, w, h, bg, opt.threshold, opt.close, solid);
     const gain = paper.map((p, c) => p / Math.max(1, bg[c]));
+    const t0 = opt.threshold * 0.5, t1 = opt.threshold * 5;
     for (let i = 0; i < w * h; i++) {
       const k = i * 4;
-      for (let c = 0; c < 3; c++) d[k + c] = d[k + c] * gain[c];
-      d[k + 3] = alpha[i];
+      let a = alpha[i] / 255;
+      if (soft && soft[i]) {
+        const diff = Math.max(Math.abs(d[k] - bg[0]), Math.abs(d[k + 1] - bg[1]), Math.abs(d[k + 2] - bg[2]));
+        const s = soft[i] / 255, paint = smooth(clamp((diff - t0) / (t1 - t0)));
+        a = a * (1 - s) + Math.min(a, paint) * s;
+      }
+      // unmix the paper out of semi-transparent pixels: pixel = a * paint + (1 - a) * paper
+      for (let c = 0; c < 3; c++) {
+        const f = a > 0.02 ? (d[k + c] - (1 - a) * bg[c]) / a : bg[c];
+        d[k + c] = f * gain[c];
+      }
+      d[k + 3] = a * 255;
     }
     return data;
   }
@@ -286,7 +324,8 @@
   // ---------- Rig ----------
 
   // cfg: { size: [w, h], anchor: [x, y], images: { name: url }, regions: { name: { poly, feather } },
-  //        deformers: [...], swaps: { image: region }, solid: [region], cell, threshold, close }
+  //        deformers: [...], swaps: { image: region }, solid: [region], soft: [region],
+  //        cell, threshold, close }
   async function load(cfg, opt = {}) {
     const base = opt.base || '';
     const names = Object.keys(cfg.images);
@@ -305,7 +344,8 @@
 
     const cut = {
       paper: opt.paper || '#f5f2ec', threshold: cfg.threshold ?? 14, close: cfg.close ?? 10,
-      solid: (cfg.solid || []).map((k) => regions[k].poly),
+      solid: (cfg.solid || []).map((k) => regions[k]),
+      soft: (cfg.soft || []).map((k) => regions[k]),
     };
     const tex = {};
     names.forEach((k, i) => { tex[k] = texture(gl, cutOut(imgs[i], cut), true); });

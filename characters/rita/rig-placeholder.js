@@ -2,6 +2,7 @@
 // Coordinates are px of a 1024x1536 image; the rig rescales them to the real size.
 // When the generated art arrives, copy this file for it and redraw the regions:
 // open the scene with ?debug to see the regions (red: bent, blue: swapped) and the mesh.
+// solid: regions always inside the figure; soft: regions cut by paint density (fine hair).
 (function (g) {
   const DIR = 'out/rita-placeholder/';
   const size = [1024, 1536];
@@ -28,6 +29,8 @@
     ],
     swaps: { blink: 'eyes' },
     solid: ['skirtFront'],
+    // free hair: alpha follows the paint, so paper between strands turns transparent
+    soft: ['hair'],
   };
 
   const b = {
@@ -49,6 +52,7 @@
       { type: 'breath', region: 'chest', pivotY: 640, topY: 100, amp: 0.0025, period: 4.2, seed: 1 },
     ],
     swaps: { turn: 'head', 'turn-blink': 'eyesTurn' },
+    soft: ['hair'],
   };
 
   g.DH.ritaRig = { a, b };
