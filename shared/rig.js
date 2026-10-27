@@ -194,6 +194,8 @@
   // too: a gain fitted on dark paint alone over-darkens them). Cells
   // without data (that region, plain paper) take their neighbours' values; the field is
   // smoothed and applied with bilinear interpolation, so brush detail stays untouched.
+  // Plain paper is left as it is: darkened paper would no longer match the background
+  // and the cut-out would keep it as a grey patch.
   function matchColors(src, ref, exclude, cell = 24) {
     const w = src.width, h = src.height;
     const sd = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h);
@@ -247,16 +249,20 @@
     };
     for (let i = 0; i < 40; i++) pass(true);
     for (let i = 0; i < 2; i++) pass(false);
-    // bilinear field over cell centres
+    // bilinear field over cell centres, faded out towards plain paper
+    const bg = borderColor(s, w, h);
     for (let y = 0; y < h; y++) {
       const fy = clamp(y / cell - 0.5, 0, gh - 1), y0 = Math.floor(fy), y1 = Math.min(gh - 1, y0 + 1), ty = fy - y0;
       for (let x = 0; x < w; x++) {
         const fx = clamp(x / cell - 0.5, 0, gw - 1), x0 = Math.floor(fx), x1 = Math.min(gw - 1, x0 + 1), tx = fx - x0;
         const k = (y * w + x) * 4;
+        const diff = Math.max(Math.abs(s[k] - bg[0]), Math.abs(s[k + 1] - bg[1]), Math.abs(s[k + 2] - bg[2]));
+        const paint = smooth(clamp((diff - 4) / 20));
+        if (!paint) continue;
         for (let c = 0; c < 3; c++) {
           const top = gain[(y0 * gw + x0) * 3 + c] * (1 - tx) + gain[(y0 * gw + x1) * 3 + c] * tx;
           const bot = gain[(y1 * gw + x0) * 3 + c] * (1 - tx) + gain[(y1 * gw + x1) * 3 + c] * tx;
-          s[k + c] = s[k + c] * (top * (1 - ty) + bot * ty);
+          s[k + c] = s[k + c] * (1 + (top * (1 - ty) + bot * ty - 1) * paint);
         }
       }
     }
