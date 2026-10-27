@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Проба: порыв ветра (сцена 2)</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: #f5f2ec; }
+  #stage canvas { position: absolute; left: 0; top: 0; display: block; }
+  #paper { mix-blend-mode: multiply; }
+  #ui { position: fixed; left: 12px; right: 12px; bottom: 10px; display: flex; gap: 10px; align-items: center;
+        font: 14px/1 "Segoe UI", sans-serif; color: #ece6dc; }
+  #ui input { flex: 1; }
+  body.render #ui { display: none; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="back" width="1920" height="1080"></canvas><canvas id="fx" width="1920" height="1080"></canvas><canvas id="paper" width="1920" height="1080"></canvas></div>
+<div id="ui"><button id="play">▶</button><input id="scrub" type="range" min="0" max="2.5" step="0.01" value="0"><span id="time">0.00</span></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/rig.js"></script>
+<script src="../../shared/watercolor.js"></script>
+<script src="../../characters/rita/rig-art.js"></script>
+<script>
+// Scene 2 of intro-01, "the gust" (docs/intro-01-storyboard.md), variant chosen by the owner:
+// the wind brings ink strokes from the right; they sweep through Rita's hair, catch a few
+// strands and carry them off, curl up into the sky and the camera flies after them.
+//   0.0-0.5  end of scene 1: calm, the camera arc goes on (0.5 here = 3.0 in the video)
+//   0.5-0.9  the gust: hair, sash and hem fly downwind; strokes come in from the right
+//   0.8-1.6  three strokes pass through the hair, each pulls a strand, the strand tears off
+//   1.0-2.5  the strokes curl up into the sky, the camera follows up and forward,
+//            Rita leaves the frame at the bottom
+//   1.8-2.5  big strokes rush past the lens, white paper closes the frame (cut to the wall)
+// Every stroke is a pure function of time: a brush comet moving along a fixed curve.
+const { ease, lerp, progress } = DH;
+const W = DH.wc;
+const DURATION = 2.5, G = 0.5; // G: the gust hits
+const params = new URLSearchParams(location.search);
+const back = document.getElementById('back'), fx = document.getElementById('fx');
+const bctx = back.getContext('2d'), fctx = fx.getContext('2d');
+
+const HORIZON = 700, X0 = -400, X1 = 2400;
+const PAL = {
+  skyTop: '#f5f2ec', skyLow: '#e4e6e8', far: ['#aeb6c2', '#8f9aab'], mid: ['#7d8593', '#5b6370'],
+  water: '#c3cad2', mist: '#f2f1ee',
+};
+const INK = '#24170f', HAIR = '#3a2820', PAPER = '#f5f2ec';
+
+// ---------- the place of scene 1 (as in videos/probe-landscape, morning) ----------
+
+function paintPlace() {
+  const L = {}, ox = X0, w = X1 - X0;
+  // the sky is painted taller than the frame: the camera flies up into it
+  const sc = W.canvas(1920 * 2, 2600), sx = sc.getContext('2d');
+  const g = sx.createLinearGradient(0, 0, 0, 2600);
+  g.addColorStop(0, '#f6f4ef'); g.addColorStop(0.62, PAL.skyTop); g.addColorStop(0.92, PAL.skyLow);
+  sx.fillStyle = g; sx.fillRect(0, 0, sc.width, sc.height);
+  L.sky = { c: sc, ox: -960, oy: -1700, p: 0.05 };
+  const far = W.ridge({ x0: X0, x1: X1, base: 615, jag: 10, seed: 3, peaks: W.peakRow({ x0: X0, x1: X1, hMin: 110, hMax: 290, gap: 320, seed: 53 }) });
+  const mid = W.ridge({ x0: X0, x1: X1, base: 695, jag: 14, seed: 5, peaks: W.peakRow({ x0: X0, x1: X1, hMin: 70, hMax: 250, gap: 380, seed: 65 }) });
+  L.far = { c: W.mountains({ w, h: 520, ox, oy: 260, ridge: far, color: PAL.far[0], under: PAL.skyLow, deep: PAL.far[1], fadeTo: 700, seed: 3 }), ox, oy: 260, p: 0.25 };
+  L.mid = { c: W.mountains({ w, h: 560, ox, oy: 380, ridge: mid, color: PAL.mid[0], under: PAL.skyLow, deep: PAL.mid[1], fadeTo: 770, ink: 16, inkColor: '#3e3a36', seed: 5 }), ox, oy: 380, p: 0.55 };
+  const wc = W.canvas(w, 520), wx = wc.getContext('2d');
+  wx.translate(-ox, -HORIZON);
+  W.wash(wx, [[X0, HORIZON, 0.01], [X1, HORIZON, 0.01], [X1, HORIZON + 520, 0.05], [X0, HORIZON + 520, 0.05]], PAL.water, { layers: 18, alpha: 0.06, seed: 31 });
+  const r = W.rng(32);
+  wx.globalCompositeOperation = 'destination-out';
+  for (let i = 0; i < 90; i++) {
+    const y = HORIZON + 8 + Math.pow(r(), 1.6) * 400, x = X0 + r() * w, len = 60 + r() * 260;
+    W.dryStroke(wx, [[x, y], [x + len * 0.5, y + 1], [x + len, y]], 2 + r() * 4, '#000000', { alpha: 0.5, hairs: 2, dry: 0.5, seed: 40 + i });
+  }
+  L.water = { c: wc, ox, oy: HORIZON, p: 0.8 };
+  L.mistFar = { c: W.mistBand({ w: w + 800, h: 120, color: PAL.mist, seed: 13 }), ox: ox - 400, oy: 600, p: 0.35, speed: 9 };
+  L.mistLow = { c: W.mistBand({ w: w + 800, h: 110, color: PAL.mist, seed: 17 }), ox: ox - 400, oy: 655, p: 0.65, speed: -14 };
+  L.rock = W.rock({ x: 1250, y: 1012, w: 520, seed: 3 });
+  L.pine = W.pineBranch({ x: -160, y: -60, scale: 1.2, seed: 5, blur: 4 });
+  return L;
+}
+
+// Transform for world point space seen by camera cam at depth p (the same maths as DH.ink.layer).
+function view(ctx, cam, p) {
+  const z = 1 + (cam.zoom - 1) * p;
+  ctx.setTransform(z, 0, 0, z, 960 + z * (-960 - cam.x * p), 540 + z * (-540 - cam.y * p));
+  return z;
+}
+function place(ctx, img, ox, oy, cam, p) {
+  view(ctx, cam, p);
+  ctx.transform(1, 0, 0, 1, ox, oy);
+  ctx.drawImage(img, 0, 0);
+}
+
+function drawPlace(L, cam, t) {
+  const ctx = bctx;
+  place(ctx, L.sky.c, L.sky.ox, L.sky.oy, cam, L.sky.p);
+  place(ctx, L.far.c, L.far.ox, L.far.oy, cam, L.far.p);
+  { const m = L.mistFar; place(ctx, m.c, m.ox + ((t * m.speed) % 400), m.oy, cam, m.p); }
+  place(ctx, L.mid.c, L.mid.ox, L.mid.oy, cam, L.mid.p);
+  place(ctx, L.water.c, L.water.ox, L.water.oy, cam, L.water.p);
+  { const m = L.mistLow; place(ctx, m.c, m.ox + ((t * m.speed) % 400 + 400) % 400 - 400, m.oy, cam, m.p); }
+  place(ctx, L.rock.canvas, L.rock.ox, L.rock.oy, cam, 1);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+// ---------- the gust and the camera ----------
+
+// 0..1 strength of the gust: hits at G, peaks quickly, stays strong.
+const gust = (t) => ease.out(progress(t, G, G + 0.35)) * (1 - 0.15 * progress(t, 1.4, 2.5));
+
+function camera(t) {
+  // calm arc to G (as at the end of scene 1), then the flight after the strokes: up into the
+  // sky and forward, Rita drops out of the frame at the bottom
+  const a = progress(t, 0, G), f = ease.draw(progress(t, G + 0.25, DURATION));
+  const fu = f * f * (3 - 2 * f);
+  return { x: lerp(10, 22, a) + 160 * f, y: -8 - 640 * fu, zoom: 1.06 + 0.5 * fu };
+}
+
+// ---------- strokes ----------
+
+// Rita's art maps to world: anchor (980, 1085) of the 2000x1116 image at (1250, 1012),
+// 675 units tall. Hair tips are around image (680-800, 300-470).
+const RITA = { x: 1250, y: 1012, h: 675 };
+const S = RITA.h / 1116;
+const art = (ix, iy) => [RITA.x + (ix - 980) * S, RITA.y + (iy - 1085) * S];
+// the gust bends the hair along its root->tip direction by up to ~0.05 of the image height
+const HAIR_DIR = (() => { const dx = 680 - 990, dy = 400 - 80, l = Math.hypot(dx, dy); return [dx / l, dy / l]; })();
+
+// Smooth curve through the waypoints P (Catmull-Rom), u in 0..1 over all of them.
+function bez(P, u) {
+  const n = P.length - 1, f = Math.min(n - 1e-9, Math.max(0, u * n)), i = Math.floor(f), k = f - i;
+  const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(n, i + 2)];
+  const c = (a, b, c2, d) => 0.5 * (2 * b + (-a + c2) * k + (2 * a - 5 * b + 4 * c2 - d) * k * k + (-a + 3 * b - 3 * c2 + d) * k * k * k);
+  return [c(p0[0], p1[0], p2[0], p3[0]), c(p0[1], p1[1], p2[1], p3[1])];
+}
+
+// Each stroke: a curve through waypoints in world coords at depth p, the time it enters (t0) and how long it
+// takes to fly the curve (dur), its width, the share of the curve it covers (len), how much
+// it ripples across its path (wave). catch: image point of the hair tip it pulls a strand
+// from. screen: a stroke right at the lens, given in frame coords.
+const STROKES = [
+  // at Rita's depth: over her head (her face stays clear), down through the hair where they
+  // catch the strands, then a curl up into the sky. Head ~(1290, 380-470), tips ~(1075-1120, 540-630)
+  { P: [[2000, 300], [1550, 285], [1300, 290], [1160, 420], [1078, 568], [960, 570], [880, 390], [740, 20], [480, -480]], p: 1, t0: 0.55, dur: 1.75, w: 56, len: 0.3, wave: 14, seed: 11, catch: [700, 360] },
+  { P: [[2040, 250], [1600, 245], [1310, 265], [1200, 420], [1112, 628], [990, 640], [900, 450], [790, 90], [600, -540]], p: 1, t0: 0.7, dur: 1.7, w: 44, len: 0.28, wave: 12, seed: 12, catch: [760, 455] },
+  { P: [[2000, 340], [1560, 320], [1320, 300], [1170, 400], [1070, 532], [950, 505], [850, 300], [680, -80], [380, -460]], p: 1, t0: 0.85, dur: 1.6, w: 48, len: 0.28, wave: 12, seed: 13, catch: [690, 300] },
+  // behind her, smaller and paler
+  { P: [[2050, 300], [1700, 320], [1100, 380], [900, -700]], p: 0.6, t0: 0.5, dur: 1.9, w: 34, len: 0.3, wave: 18, seed: 14, alpha: 0.55 },
+  { P: [[2050, 560], [1800, 520], [1300, 480], [1150, -650]], p: 0.7, t0: 0.72, dur: 1.75, w: 30, len: 0.3, wave: 16, seed: 15, alpha: 0.6 },
+  { P: [[2040, 200], [1700, 260], [1250, 300], [1000, -800]], p: 0.85, t0: 0.95, dur: 1.55, w: 38, len: 0.3, wave: 20, seed: 16, alpha: 0.7 },
+  // in front of her, big and soft (out of focus)
+  { P: [[2080, 1000], [1500, 990], [1000, 870], [780, 500], [560, 0], [300, -500]], p: 1.3, t0: 0.85, dur: 1.65, w: 80, len: 0.34, wave: 34, seed: 17, blur: 5 },
+  { P: [[2080, 150], [1700, 140], [1200, 110], [900, -800]], p: 1.25, t0: 1.15, dur: 1.35, w: 70, len: 0.34, wave: 30, seed: 18, blur: 4 },
+  // the rush past the lens that fills the frame before the paper closes it
+  { P: [[2300, 1150], [1500, 800], [800, 500], [-300, -200]], screen: true, t0: 1.7, dur: 0.75, w: 260, len: 0.45, wave: 40, seed: 20, blur: 9, alpha: 0.65 },
+  { P: [[2300, 350], [1500, 250], [700, 150], [-300, -300]], screen: true, t0: 1.82, dur: 0.7, w: 220, len: 0.45, wave: 36, seed: 21, blur: 8, alpha: 0.55 },
+  { P: [[2300, 800], [1400, 700], [600, 700], [-400, 300]], screen: true, t0: 1.95, dur: 0.6, w: 300, len: 0.45, wave: 30, seed: 22, blur: 12, alpha: 0.5 },
+];
+
+// Points of the curve between u0 and u1, rippled across the path by a wave that travels
+// along the stroke (the wind shakes it like a ribbon). q: 0 at the tail, 1 at the head.
+function segment(s, u0, u1, t, n = 40) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const q = i / n, u = lerp(u0, u1, q);
+    const a = bez(s.P, Math.max(0, u - 0.004)), b = bez(s.P, Math.min(1, u + 0.004)), c = bez(s.P, u);
+    let nx = -(b[1] - a[1]), ny = b[0] - a[0];
+    const l = Math.hypot(nx, ny) || 1;
+    const off = s.wave * Math.sin(u * 14 - t * 9 + s.seed) * (0.3 + 0.7 * (1 - q));
+    pts.push([c[0] + (nx / l) * off, c[1] + (ny / l) * off]);
+  }
+  return pts;
+}
+
+// A dry-brush ribbon (飞白): a pale wash under many brush hairs that break up towards the
+// tail; the ribbon turns edge-on now and then as it twists in the wind.
+function ribbon(ctx, pts, s, a, t) {
+  const n = pts.length - 1;
+  const width = (q) => s.w * Math.pow(Math.sin(Math.PI * Math.min(1, q * 0.95 + 0.03)), 0.5) * (0.35 + 0.65 * q) *
+    (0.45 + 0.55 * Math.abs(Math.cos(q * 3.2 + t * 4 + s.seed)));
+  ctx.fillStyle = W.rgba(INK, a * 0.16);
+  W.fillPoly(ctx, W.taper(pts, width));
+  // normals along the ribbon
+  const N = pts.map((p, i) => {
+    const p0 = pts[Math.max(0, i - 1)], p1 = pts[Math.min(n, i + 1)];
+    const dx = p1[0] - p0[0], dy = p1[1] - p0[1], l = Math.hypot(dx, dy) || 1;
+    return [-dy / l, dx / l];
+  });
+  const r = W.rng(s.seed);
+  ctx.lineCap = 'round';
+  for (let h = 0; h < 14; h++) {
+    const o = r() - 0.5, lw = 0.6 + r() * 2.6 * (s.w / 50), ha = a * (0.25 + 0.6 * r()), seedH = r() * 50;
+    ctx.strokeStyle = W.rgba(INK, ha);
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    let on = false;
+    for (let i = 0; i <= n; i++) {
+      const q = i / n;
+      // dry towards the tail: the hair skips more often there
+      const ink = DH.noise(q * 9 + seedH, s.seed + h) * 0.5 + 0.5 > 0.62 - 0.55 * q;
+      const x = pts[i][0] + N[i][0] * o * width(q), y = pts[i][1] + N[i][1] * o * width(q);
+      if (ink && on) ctx.lineTo(x, y);
+      else if (ink) { ctx.moveTo(x, y); on = true; } else on = false;
+    }
+    ctx.stroke();
+  }
+  // the wet head: a darker blot where the brush still holds ink
+  ctx.fillStyle = W.rgba(INK, a * 0.45);
+  W.fillPoly(ctx, W.taper(pts.slice(Math.floor(n * 0.82)), (q) => width(0.82 + 0.18 * q) * 0.8 * Math.sin(Math.PI * Math.min(1, q * 0.9 + 0.1))));
+}
+
+// One stroke at time t: its head flies along the curve, the body is the stretch behind it.
+// The head rushes in and then flies on more slowly, but never stops: the body stays on the
+// curve to the end and the strokes keep leading the camera.
+const pace = (k) => 0.65 * ease.out(k) + 0.35 * k;
+function strokeHead(s, t) {
+  const k = progress(t, s.t0, s.t0 + s.dur);
+  return [k, pace(k) * (s.screen ? 1 + s.len : 1)];
+}
+function drawStroke(ctx, s, t) {
+  const [k, head] = strokeHead(s, t);
+  if (k <= 0) return;
+  const u1 = Math.min(1, head), u0 = Math.max(0, head - s.len);
+  if (u1 - u0 < 0.004) return;
+  const pts = segment(s, u0, u1, t);
+  const a = (s.alpha ?? 0.9) * Math.min(1, k * 6);
+  if (s.screen) ctx.setTransform(1, 0, 0, 1, 0, 0);
+  else view(ctx, cam, s.p);
+  ctx.filter = s.blur ? `blur(${s.blur}px)` : 'none';
+  ribbon(ctx, pts, s, a, t);
+  ctx.filter = 'none';
+}
+
+// The strand a stroke pulls out of the hair: a few loose hairs from the hair tip to the
+// stroke's tail. They stretch while the root holds, then tear off and trail the stroke.
+function drawStrand(ctx, s, t) {
+  if (!s.catch) return;
+  const [tx0, ty0] = art(...s.catch);
+  // the curve point nearest to the tip, and when the head gets there
+  let best = 0, bd = 1e9;
+  for (let i = 0; i <= 80; i++) { const q = bez(s.P, i / 80), d = Math.hypot(q[0] - tx0, q[1] - ty0); if (d < bd) { bd = d; best = i / 80; } }
+  // when the head reaches `best`
+  let kc = 0;
+  while (kc < 1 && pace(kc) < best) kc += 0.002;
+  const tCatch = s.t0 + s.dur * kc;
+  if (t < tCatch) return;
+  const [, head] = strokeHead(s, t);
+  const gd = 0.05 * 1116 * S * gust(t);
+  const tip = [tx0 + HAIR_DIR[0] * gd, ty0 + HAIR_DIR[1] * gd];
+  // the head hooks the strand as it passes the tip and drags it; the strand stretches up to
+  // MAXL, then tears off and flies after the hook with the same length
+  const MAXL = 160, hookAt = (h) => bez(s.P, Math.max(0, Math.min(1, h) - 0.03));
+  const hook = hookAt(head);
+  let tear = s.t0 + s.dur;
+  for (let tt = tCatch; tt < s.t0 + s.dur; tt += 0.005) {
+    const q = hookAt(strokeHead(s, tt)[1]);
+    if (Math.hypot(q[0] - tip[0], q[1] - tip[1]) > MAXL) { tear = tt; break; }
+  }
+  // after the tear the root slides onto the curve, MAXL behind the hook
+  let u = Math.max(0, Math.min(1, head) - 0.03), q = hook;
+  while (u > 0 && Math.hypot(q[0] - hook[0], q[1] - hook[1]) < MAXL) { u -= 0.004; q = bez(s.P, u); }
+  const fr = ease.out(progress(t, tear, tear + 0.25));
+  const end = hook, root = [lerp(tip[0], q[0], fr), lerp(tip[1], q[1], fr)];
+  const free = ease.out(progress(t, tear, tear + 0.3));
+  const fade = 1 - progress(t, tear + 0.7, tear + 1.1);
+  if (fade <= 0) return;
+  view(ctx, cam, s.p);
+  ctx.lineCap = 'round';
+  const r = W.rng(s.seed + 100);
+  for (let j = 0; j < 4; j++) {
+    const spread = (r() - 0.5) * 10, bow = 10 + r() * 16, wav = 3 + r() * 4;
+    ctx.strokeStyle = W.rgba(j % 2 ? '#5a4033' : HAIR, (0.55 + 0.3 * r()) * fade);
+    ctx.lineWidth = 0.8 + r() * 0.9;
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const u = i / 24, v = 1 - u;
+      const mx = (root[0] + end[0]) / 2, my = (root[1] + end[1]) / 2 + bow * (1 - free * 0.6);
+      const x = v * v * root[0] + 2 * v * u * mx + u * u * end[0];
+      const y = v * v * root[1] + 2 * v * u * my + u * u * end[1] + spread * u + wav * Math.sin(u * 9 - t * 12 + j);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+  }
+}
+
+// White paper closes the frame from the right with a ragged wet edge.
+function paperWipe(ctx, t) {
+  const k = ease.draw(progress(t, 2.08, 2.48));
+  if (k <= 0) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const edge = lerp(2150, -250, k), r = W.rng(77), pts = [];
+  for (let y = -40; y <= 1120; y += 40) pts.push([edge + 120 * Math.sin(y * 0.006 + 1.3) + 60 * (r() - 0.5) - (y / 1080) * 180, y]);
+  const poly = [...pts, [2200, 1120], [2200, -40]];
+  ctx.fillStyle = PAPER;
+  ctx.filter = 'blur(10px)';
+  W.fillPoly(ctx, poly);
+  ctx.filter = 'none';
+  W.fillPoly(ctx, poly.map(([x, y], i) => (i < pts.length ? [x + 28, y] : [x, y])));
+}
+
+// ---------- frame ----------
+
+let L, rig, cam;
+function renderAt(t) {
+  t = Math.min(Math.max(t, 0), DURATION - 1e-6);
+  cam = camera(t);
+  bctx.setTransform(1, 0, 0, 1, 0, 0);
+  drawPlace(L, cam, t);
+  const gk = gust(t);
+  rig.drawAt({ t: t + 2.5, gust: gk, wind: 1 + 0.8 * gk }, { cam, ...RITA });
+  fctx.setTransform(1, 0, 0, 1, 0, 0);
+  fctx.clearRect(0, 0, 1920, 1080);
+  const order = STROKES.filter((s) => !s.screen).sort((a, b) => a.p - b.p);
+  // strokes behind her go on the back canvas over the place, the rest above her
+  for (const s of order) {
+    const ctx = s.p < 1 ? bctx : fctx;
+    drawStroke(ctx, s, t);
+    drawStrand(ctx, s, t);
+  }
+  place(fctx, L.pine.canvas, L.pine.ox, L.pine.oy, cam, 1.7);
+  for (const s of STROKES) if (s.screen) drawStroke(fctx, s, t);
+  paperWipe(fctx, t);
+  bctx.setTransform(1, 0, 0, 1, 0, 0);
+  fctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+(async () => {
+  rig = await DH.rig.load(DH.ritaArt.a, { base: '../../', paper: PAPER });
+  L = paintPlace();
+  document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
+  fx.before(rig.canvas);
+  window.DURATION = DURATION;
+  window.renderAt = renderAt;
+  startPreview();
+})().catch((e) => {
+  document.body.insertAdjacentHTML('afterbegin', `<pre style="color:#f88;font:16px monospace">${e.stack}</pre>`);
+  throw e;
+});
+
+// Preview UI only: the renderer calls renderAt(t) directly.
+function startPreview() {
+  if (params.has('render')) { document.body.classList.add('render'); return; }
+  const stage = document.getElementById('stage');
+  const fit = () => { stage.style.transform = `scale(${Math.min(innerWidth / 1920, (innerHeight - 40) / 1080)})`; };
+  addEventListener('resize', fit); fit();
+  const scrub = document.getElementById('scrub'), label = document.getElementById('time'), btn = document.getElementById('play');
+  let playing = false, startClock = 0, startT = 0;
+  const show = (t) => { renderAt(t); scrub.value = t; label.textContent = t.toFixed(2); };
+  scrub.oninput = () => { playing = false; btn.textContent = '▶'; show(+scrub.value); };
+  btn.onclick = () => { playing = !playing; btn.textContent = playing ? '❚❚' : '▶'; startClock = performance.now(); startT = +scrub.value; if (playing) tick(); };
+  function tick() { if (!playing) return; show((startT + (performance.now() - startClock) / 1000) % DURATION); requestAnimationFrame(tick); }
+  show(+(params.get('t') || 0));
+}
+</script>
+</body>
+</html>
