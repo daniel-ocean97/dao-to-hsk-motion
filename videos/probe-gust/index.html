@@ -31,6 +31,8 @@
 //   0.8-1.6  three strokes pass through the hair, each pulls a strand, the strand tears off
 //   1.0-2.5  the strokes curl up into the sky, the camera follows up and forward,
 //            Rita leaves the frame at the bottom
+//   0.6-2.5  wine-red petals: a few tear off the hair tips in the gust, and each strand the
+//            wind carries off turns into petals that drift up after the strokes
 //   1.8-2.5  big strokes rush past the lens, white paper closes the frame (cut to the wall)
 // Every stroke is a pure function of time: a brush comet moving along a fixed curve.
 const { ease, lerp, progress } = DH;
@@ -231,9 +233,11 @@ function drawStroke(ctx, s, t) {
 }
 
 // The strand a stroke pulls out of the hair: a few loose hairs from the hair tip to the
-// stroke's tail. They stretch while the root holds, then tear off and trail the stroke.
-function drawStrand(ctx, s, t) {
-  if (!s.catch) return;
+// stroke's head. They stretch while the root holds, then tear off and trail the stroke;
+// soon after the tear the strand turns into petals (see PETALS).
+// Returns { root, end, tear } at time t, or null before the stroke reaches the hair.
+function strandAt(s, t) {
+  if (!s.catch) return null;
   const [tx0, ty0] = art(...s.catch);
   // the curve point nearest to the tip, and when the head gets there
   let best = 0, bd = 1e9;
@@ -242,7 +246,7 @@ function drawStrand(ctx, s, t) {
   let kc = 0;
   while (kc < 1 && pace(kc) < best) kc += 0.002;
   const tCatch = s.t0 + s.dur * kc;
-  if (t < tCatch) return;
+  if (t < tCatch) return null;
   const [, head] = strokeHead(s, t);
   const gd = 0.05 * 1116 * S * gust(t);
   const tip = [tx0 + HAIR_DIR[0] * gd, ty0 + HAIR_DIR[1] * gd];
@@ -259,9 +263,19 @@ function drawStrand(ctx, s, t) {
   let u = Math.max(0, Math.min(1, head) - 0.03), q = hook;
   while (u > 0 && Math.hypot(q[0] - hook[0], q[1] - hook[1]) < MAXL) { u -= 0.004; q = bez(s.P, u); }
   const fr = ease.out(progress(t, tear, tear + 0.25));
-  const end = hook, root = [lerp(tip[0], q[0], fr), lerp(tip[1], q[1], fr)];
+  return { root: [lerp(tip[0], q[0], fr), lerp(tip[1], q[1], fr)], end: hook, tear };
+}
+// tear time of each catching stroke (computed once, it does not depend on t)
+const tearOf = (s) => strandAt(s, s.t0 + s.dur - 1e-3)?.tear ?? Infinity;
+
+function drawStrand(ctx, s, t) {
+  if (!s.catch) return;
+  const g = strandAt(s, t);
+  if (!g) return;
+  const { root, end, tear } = g;
   const free = ease.out(progress(t, tear, tear + 0.3));
-  const fade = 1 - progress(t, tear + 0.7, tear + 1.1);
+  // the strand dissolves while its petals open (from the far end back to the root)
+  const fade = 1 - progress(t, tear + PETAL_DELAY, tear + PETAL_DELAY + 0.4);
   if (fade <= 0) return;
   view(ctx, cam, s.p);
   ctx.lineCap = 'round';
@@ -281,6 +295,96 @@ function drawStrand(ctx, s, t) {
     ctx.stroke();
   }
 }
+
+// ---------- petals ----------
+
+// Wine-red petals (brand `wine`, docs/brand.md): the strands the wind carries off turn into
+// petals, and a few tear off the hair tips in the gust. Few of them and painted like the
+// landscape, so they read as petals and not as particles. Each petal is a pure function of
+// the time since it opened: it drifts after its stroke but slower, the wind lifts it, it
+// tumbles and turns edge-on.
+const PETAL_DELAY = 0.1; // after the tear, the strand starts turning into petals
+const WINE = ['#7b1e2b', '#5e1520', '#8c2f3c', '#9a4150'];
+
+// Watercolour petal sprites: a rounded petal with a small notch at the tip, a wash with a
+// ragged edge, the dried darker rim, paler at the base.
+function paintPetals(n = 8) {
+  const out = [], r = W.rng(301);
+  for (let i = 0; i < n; i++) {
+    const c = W.canvas(72, 72), x = c.getContext('2d');
+    x.translate(36, 36);
+    const len = 24 + r() * 6, wid = 14 + r() * 6, poly = [];
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2, sa = Math.sin(a), ca = Math.cos(a);
+      // narrow at the base (bottom), round at the top, a notch at the very top
+      const narrow = 0.45 + 0.55 * (1 - ca) / 2, notch = 1 - 0.18 * Math.exp(-((a - Math.PI) ** 2) * 18);
+      poly.push([sa * wid * narrow, ca * len * 0.5 * notch + len * 0.05, 0.06]);
+    }
+    const col = WINE[Math.floor(r() * WINE.length)];
+    const base = W.wash(x, poly, col, { layers: 14, alpha: 0.11 + r() * 0.05, rough: 0.06, seed: 310 + i });
+    x.strokeStyle = W.rgba(WINE[1], 0.35);
+    x.lineWidth = 1.1;
+    x.beginPath(); base.forEach(([px, py], k) => (k ? x.lineTo(px, py) : x.moveTo(px, py))); x.closePath(); x.stroke();
+    // paler towards the base: lift some paint
+    x.globalCompositeOperation = 'destination-out';
+    const g = x.createRadialGradient(0, len * 0.42, 0, 0, len * 0.42, len * 0.55);
+    g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g; x.fillRect(-36, -36, 72, 72);
+    out.push(c);
+  }
+  return out;
+}
+
+// Where and when each petal opens. From a strand: 4 petals along it, from the far end
+// to the root; from the hair tips: 3 petals at the gust.
+function planPetals() {
+  const list = [], r = W.rng(320);
+  for (const s of STROKES) {
+    if (!s.catch) continue;
+    const tear = tearOf(s);
+    for (let j = 0; j < 4; j++) {
+      const tb = tear + PETAL_DELAY + 0.07 * j, g = strandAt(s, tb);
+      const f = 1 - (j + 0.5) / 4; // far end first
+      const at = [lerp(g.root[0], g.end[0], f), lerp(g.root[1], g.end[1], f)];
+      // fly where the stroke flies, but slower
+      const d = [g.end[0] - g.root[0], g.end[1] - g.root[1]], l = Math.hypot(...d) || 1;
+      list.push({ tb, at, dir: [d[0] / l, d[1] / l], speed: 220 + 120 * r(), sprite: Math.floor(r() * 8), size: 0.95 + 0.45 * r(),
+        spin: (r() - 0.5) * 5, flip: 4 + r() * 5, ph: r() * 6.28, blur: 0, alpha: 0.85 + 0.15 * r() });
+    }
+  }
+  // straight from the hair tips as the gust hits; one big and soft, near the lens
+  for (const [ix, iy, tb, big] of [[720, 330, 0.62, 0], [780, 430, 0.7, 0], [700, 400, 0.78, 1]]) {
+    list.push({ tb, at: art(ix, iy), dir: [-0.85, -0.5], speed: 150 + 80 * r(), sprite: Math.floor(r() * 8), size: big ? 1.9 : 0.8 + 0.3 * r(),
+      spin: (r() - 0.5) * 4, flip: 4 + r() * 4, ph: r() * 6.28, blur: big ? 3 : 0, alpha: big ? 0.7 : 0.9 });
+  }
+  return list;
+}
+
+function drawPetals(ctx, t) {
+  view(ctx, cam, 1);
+  const base = ctx.getTransform();
+  for (const q of PETALS) {
+    const tau = t - q.tb;
+    if (tau <= 0) continue;
+    // the push of the wind fades, the lift grows (it keeps up with the camera); a flutter
+    const push = q.speed * (1 - Math.exp(-tau * 1.6)) / 1.6;
+    const x = q.at[0] + q.dir[0] * push + 16 * Math.sin(tau * 5.3 + q.ph);
+    const y = q.at[1] + q.dir[1] * push - 260 * tau - 150 * tau * tau + 9 * Math.sin(tau * 7.1 + q.ph * 1.7);
+    const open = ease.out(clamp01(tau / 0.18)); // it opens out of the strand
+    const flip = Math.cos(tau * q.flip + q.ph); // turning edge-on and back
+    ctx.setTransform(base);
+    ctx.translate(x, y);
+    ctx.rotate(q.ph + tau * q.spin);
+    ctx.scale(q.size * open * (0.15 + 0.85 * Math.abs(flip)), q.size * open);
+    ctx.globalAlpha = q.alpha * Math.min(1, tau / 0.1);
+    ctx.filter = q.blur ? `blur(${q.blur}px)` : 'none';
+    ctx.drawImage(PETAL_ART[q.sprite], -36, -36);
+  }
+  ctx.globalAlpha = 1;
+  ctx.filter = 'none';
+}
+const clamp01 = (x) => Math.min(1, Math.max(0, x));
+let PETAL_ART, PETALS;
 
 // White paper closes the frame from the right with a ragged wet edge.
 function paperWipe(ctx, t) {
@@ -316,6 +420,7 @@ function renderAt(t) {
     drawStroke(ctx, s, t);
     drawStrand(ctx, s, t);
   }
+  drawPetals(fctx, t);
   place(fctx, L.pine.canvas, L.pine.ox, L.pine.oy, cam, 1.7);
   for (const s of STROKES) if (s.screen) drawStroke(fctx, s, t);
   paperWipe(fctx, t);
@@ -326,6 +431,8 @@ function renderAt(t) {
 (async () => {
   rig = await DH.rig.load(DH.ritaArt.a, { base: '../../', paper: PAPER });
   L = paintPlace();
+  PETAL_ART = paintPetals();
+  PETALS = planPetals();
   document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
   fx.before(rig.canvas);
   window.DURATION = DURATION;
