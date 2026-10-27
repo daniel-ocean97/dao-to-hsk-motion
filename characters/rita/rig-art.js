@@ -14,6 +14,8 @@
       // kept clear of the back sleeve, so the sleeve does not move with the hair
       hair: { feather: 22, poly: [[920, 60], [970, 40], [960, 200], [940, 250], [920, 330], [890, 400], [850, 440], [790, 465], [690, 420], [670, 350], [780, 250], [870, 170]] },
       sleeve: { feather: 20, poly: [[860, 445], [925, 450], [935, 545], [870, 548], [848, 500]] },
+      // front sleeve: only the loose back corner of the cuff; the hand and the sash stay still
+      sleeveFront: { feather: 15, poly: [[975, 470], [1040, 480], [1050, 530], [1040, 570], [980, 572], [968, 530]] },
       sash: { feather: 25, poly: [[910, 520], [940, 560], [880, 640], [800, 700], [720, 760], [680, 790], [620, 720], [640, 650], [760, 620], [860, 560]] },
       hem: { feather: 45, poly: [[900, 700], [910, 800], [810, 900], [780, 1000], [740, 1090], [620, 1050], [625, 940], [730, 840], [840, 720]] },
       chest: { feather: 40, poly: [[830, 0], [1140, 0], [1140, 430], [830, 430]] },
@@ -26,6 +28,7 @@
       { type: 'flow', region: 'sash', root: [940, 540], tip: [640, 700], amp: 0.008, freq: 0.8, lag: 2.5, gust: 0.04, seed: 2 },
       { type: 'flow', region: 'hem', root: [910, 600], tip: [640, 1000], amp: 0.006, freq: 0.45, lag: 1.8, gust: 0.025, power: 2, seed: 3 },
       { type: 'flow', region: 'sleeve', root: [920, 380], tip: [870, 545], amp: 0.004, freq: 0.7, lag: 1.5, seed: 7 },
+      { type: 'flow', region: 'sleeveFront', root: [1040, 330], tip: [985, 565], amp: 0.003, freq: 0.65, lag: 1.4, seed: 8 },
       { type: 'breath', region: 'chest', pivotY: 430, topY: 40, amp: 0.0065, period: 4.2 },
     ],
     swaps: {},
