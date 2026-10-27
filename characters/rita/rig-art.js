@@ -8,7 +8,7 @@
   const a = {
     size: [2000, 1116],
     anchor: [980, 1085], // bottom of the hem, between the hidden feet
-    images: { base: DIR + 'pose-a.webp' },
+    images: { base: DIR + 'pose-a.webp', blink: DIR + 'pose-a-blink.webp' },
     regions: {
       // only parts that hang in the air: bending a part painted over the body drags the body
       // kept clear of the back sleeve, so the sleeve does not move with the hair
@@ -19,7 +19,8 @@
       sash: { feather: 25, poly: [[910, 520], [940, 560], [880, 640], [800, 700], [720, 760], [680, 790], [620, 720], [640, 650], [760, 620], [860, 560]] },
       hem: { feather: 45, poly: [[900, 700], [910, 800], [810, 900], [780, 1000], [740, 1090], [620, 1050], [625, 940], [730, 840], [840, 720]] },
       chest: { feather: 40, poly: [[830, 0], [1140, 0], [1140, 430], [830, 430]] },
-      eyes: { feather: 8, poly: [[1025, 80], [1065, 80], [1065, 108], [1025, 108]] },
+      // the eyelids only: the light spot on the cheek under the eye is gone in the blink image
+      eyes: { feather: 4, poly: [[1022, 80], [1068, 80], [1068, 109], [1022, 109]] },
       // lit front of the bodice: almost paper-white, the cut-out bit into it
       bodice: { poly: [[1020, 200], [1100, 280], [1105, 400], [1050, 400], [1020, 300]] },
     },
@@ -31,7 +32,8 @@
       { type: 'flow', region: 'sleeveFront', root: [1040, 330], tip: [985, 565], amp: 0.003, freq: 0.65, lag: 1.4, seed: 8 },
       { type: 'breath', region: 'chest', pivotY: 430, topY: 40, amp: 0.0065, period: 4.2 },
     ],
-    swaps: {},
+    swaps: { blink: 'eyes' },
+    match: { blink: { ref: 'base', exclude: 'eyes' } },
     solid: ['bodice'],
     soft: ['hair'],
   };
