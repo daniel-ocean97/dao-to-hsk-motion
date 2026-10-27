@@ -15,6 +15,7 @@
 
 <script src="../../shared/timeline.js"></script>
 <script src="../../shared/watercolor.js"></script>
+<script src="../../shared/caption.js"></script>
 <script>
 // The three places of intro-01 (docs/intro-01-storyboard.md, scenes 3-5) painted by code
 // with shared/watercolor.js and animated, 2.5 s each, no text yet:
@@ -300,6 +301,7 @@ function frameWall(t) {
   const head = DH.lerp(-120, 2120, DH.ease.draw(DH.progress(t, 0.05, 2.3)));
   show('sky', cam); show('far', cam);
   show('mistA', cam, 1, (t * 14) % 200);
+  caption(cam, t); // in the sky, behind the ridges and the brush
   show('mid', cam);
   const img = masked('wall', (m) => {
     const g = m.createLinearGradient(head - 70, 0, head, 0);
@@ -798,6 +800,24 @@ function frameShanghai(t) {
   show('mistW', cam, 1, (t * 10) % 200);
 }
 
+// ---------- Captions ----------
+
+// Each place caption hangs in the sky of its place at depth p, so the camera moves it
+// with a little parallax: it is in the scene, not glued to the screen.
+const CAPTIONS = {
+  wall: { hanzi: '长城', pinyin: 'Chángchéng', x: 400, y: 250, p: 0.35, t0: 0.15, tOut: 2.05, wind: [560, -70] },
+};
+let CAP = null;
+function caption(cam, t) {
+  const o = CAPTIONS[PLACE];
+  if (!o) return;
+  const z = 1 + (cam.zoom - 1) * o.p;
+  out.setTransform(z, 0, 0, z, 960 + z * (-960 - cam.x * o.p), 540 + z * (-540 - cam.y * o.p));
+  DH.caption.draw(out, CAP, t, o);
+  out.filter = 'none';
+  out.globalAlpha = 1;
+}
+
 const PAINT = { wall: paintWall, guilin: paintGuilin, shanghai: paintShanghai };
 const FRAME = { wall: frameWall, guilin: frameGuilin, shanghai: frameShanghai };
 const paperCanvas = document.getElementById('paper');
@@ -815,8 +835,12 @@ function renderAt(t) {
   out.setTransform(1, 0, 0, 1, 0, 0);
 }
 window.DURATION = DURATION;
-window.renderAt = renderAt;
-if (!params.has('render')) renderAt(+(params.get('t') || 2.2));
+// the caption needs its fonts loaded before the first frame
+DH.caption.ready.then(() => {
+  if (CAPTIONS[PLACE]) CAP = DH.caption.make(CAPTIONS[PLACE]);
+  window.renderAt = renderAt;
+  if (!params.has('render')) renderAt(+(params.get('t') || 2.2));
+});
 </script>
 </body>
 </html>
