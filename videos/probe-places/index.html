@@ -253,7 +253,8 @@ function paintWall() {
 function frameWall(t) {
   const k = DH.ease.draw(DH.progress(t, 0, DURATION));
   const cam = { x: DH.lerp(-110, 130, k), y: DH.lerp(10, -10, k), zoom: DH.lerp(1.03, 1.12, k) };
-  const head = DH.lerp(-120, 2120, DH.ease.out(DH.progress(t, 0.05, 2.1)));
+  // even pace, so the brush is seen writing the whole way, not dashing off at the start
+  const head = DH.lerp(-120, 2120, DH.ease.draw(DH.progress(t, 0.05, 2.3)));
   show('sky', cam); show('far', cam);
   show('mistA', cam, 1, (t * 14) % 200);
   show('mid', cam);
@@ -413,7 +414,7 @@ function paintGuilin() {
 function frameGuilin(t) {
   const k = DH.ease.draw(DH.progress(t, 0, DURATION));
   const cam = { x: DH.lerp(-40, 90, k), y: DH.lerp(20, 0, k), zoom: DH.lerp(1.0, 1.1, k) };
-  const front = DH.lerp(-200, 2500, DH.ease.out(DH.progress(t, 0, 1.9)));
+  const front = DH.lerp(-200, 2600, DH.ease.draw(DH.progress(t, 0, 2.2)));
   show('sky', cam);
   show('far', cam, 0.35 + 0.65 * smooth(t / 1.2));
   show('mistA', cam, 1, (t * 12) % 200);
