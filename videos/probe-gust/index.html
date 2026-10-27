@@ -301,8 +301,9 @@ function drawStrand(ctx, s, t) {
 // Wine-red petals (brand `wine`, docs/brand.md): the strands the wind carries off turn into
 // petals, and a few tear off the hair tips in the gust. Few of them and painted like the
 // landscape, so they read as petals and not as particles. Each petal is a pure function of
-// the time since it opened: it drifts after its stroke but slower, the wind lifts it, it
-// tumbles and turns edge-on.
+// the time since it opened: the wind picks it up and it rides the curve of one of the
+// strokes, some way behind its head and off to one side, so the petals spread out along the
+// wind's paths instead of bunching; it tumbles and turns edge-on.
 const PETAL_DELAY = 0.1; // after the tear, the strand starts turning into petals
 const WINE = ['#7b1e2b', '#5e1520', '#8c2f3c', '#9a4150'];
 
@@ -337,6 +338,7 @@ function paintPetals(n = 8) {
 
 // Where and when each petal opens. From a strand: 4 petals along it, from the far end
 // to the root; from the hair tips: 3 petals at the gust.
+const RIDERS = STROKES.filter((s) => !s.screen);
 function planPetals() {
   const list = [], r = W.rng(320);
   for (const s of STROKES) {
@@ -349,39 +351,69 @@ function planPetals() {
       // fly where the stroke flies, but slower
       const d = [g.end[0] - g.root[0], g.end[1] - g.root[1]], l = Math.hypot(...d) || 1;
       list.push({ tb, at, dir: [d[0] / l, d[1] / l], speed: 220 + 120 * r(), sprite: Math.floor(r() * 8), size: 0.95 + 0.45 * r(),
-        spin: (r() - 0.5) * 5, flip: 4 + r() * 5, ph: r() * 6.28, blur: 0, alpha: 0.85 + 0.15 * r() });
+        spin: (r() - 0.5) * 5, flip: 4 + r() * 5, ph: r() * 6.28, blur: 0, alpha: 0.85 + 0.15 * r(),
+        ...ride(at, tb, r) });
     }
   }
   // straight from the hair tips as the gust hits; one big and soft, near the lens
   for (const [ix, iy, tb, big] of [[720, 330, 0.62, 0], [780, 430, 0.7, 0], [700, 400, 0.78, 1]]) {
     list.push({ tb, at: art(ix, iy), dir: [-0.85, -0.5], speed: 150 + 80 * r(), sprite: Math.floor(r() * 8), size: big ? 1.9 : 0.8 + 0.3 * r(),
-      spin: (r() - 0.5) * 4, flip: 4 + r() * 4, ph: r() * 6.28, blur: big ? 3 : 0, alpha: big ? 0.7 : 0.9 });
+      spin: (r() - 0.5) * 4, flip: 4 + r() * 4, ph: r() * 6.28, blur: big ? 3 : 0, alpha: big ? 0.7 : 0.9,
+      ...ride(art(ix, iy), tb, r) });
   }
   return list;
 }
+// Where a petal rides in the wind: one of the three strokes passing nearest to where it
+// opens (so the wind never carries it back against itself), its lag behind the stroke's
+// head (share of the curve), how far off the curve, either side, and how much it rises on
+// its own.
+function ride(at, tb, r) {
+  const lag = 0.02 + 0.16 * r();
+  const near = RIDERS.map((R) => {
+    const c = bez(R.P, Math.max(0, Math.min(1, strokeHead(R, tb + 0.2)[1]) - lag));
+    return [Math.hypot(c[0] - at[0], c[1] - at[1]), R];
+  }).sort((a, b) => a[0] - b[0]);
+  return { ride: near[Math.floor(r() * 3)][1], lag, off: (r() < 0.5 ? -1 : 1) * (30 + 120 * r()), rise: 60 + 80 * r() };
+}
+
+// World point at depth p to frame coords, and the zoom there (the maths of view()).
+function toScreen([x, y], p) {
+  const z = 1 + (cam.zoom - 1) * p;
+  return [960 + z * (x - 960 - cam.x * p), 540 + z * (y - 540 - cam.y * p), z];
+}
 
 function drawPetals(ctx, t) {
-  view(ctx, cam, 1);
-  const base = ctx.getTransform();
   for (const q of PETALS) {
     const tau = t - q.tb;
     if (tau <= 0) continue;
-    // the push of the wind fades, the lift grows (it keeps up with the camera); a flutter
+    // first it drifts off where it opened (at Rita's depth)
     const push = q.speed * (1 - Math.exp(-tau * 1.6)) / 1.6;
-    const x = q.at[0] + q.dir[0] * push + 16 * Math.sin(tau * 5.3 + q.ph);
-    const y = q.at[1] + q.dir[1] * push - 260 * tau - 150 * tau * tau + 9 * Math.sin(tau * 7.1 + q.ph * 1.7);
+    const free = toScreen([q.at[0] + q.dir[0] * push, q.at[1] + q.dir[1] * push], 1);
+    // then the wind picks it up: it slides onto its place in the wake of its stroke, at the
+    // stroke's depth (smaller far away, bigger and softer near the lens)
+    const R = q.ride, u = Math.max(0, Math.min(1, strokeHead(R, t)[1]) - q.lag);
+    const a = bez(R.P, Math.max(0, u - 0.004)), b = bez(R.P, Math.min(1, u + 0.004)), c = bez(R.P, u);
+    const nl = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, nx = -(b[1] - a[1]) / nl, ny = (b[0] - a[0]) / nl;
+    const off = q.off + R.wave * Math.sin(u * 14 - t * 9 + R.seed); // the same ripple as the ribbon
+    // lighter than the ink, it keeps rising a little where the stroke slows down
+    const rode = toScreen([c[0] + nx * off, c[1] + ny * off - q.rise * tau * tau], R.p);
+    const pick = ease.draw(clamp01(tau / 0.45));
+    const x = lerp(free[0], rode[0], pick) + 16 * Math.sin(tau * 5.3 + q.ph);
+    const y = lerp(free[1], rode[1], pick) + 9 * Math.sin(tau * 7.1 + q.ph * 1.7);
+    const z = lerp(free[2], rode[2], pick), blur = q.blur + Math.max(0, (R.p - 1.1) * 12) * pick;
     const open = ease.out(clamp01(tau / 0.18)); // it opens out of the strand
     const flip = Math.cos(tau * q.flip + q.ph); // turning edge-on and back
-    ctx.setTransform(base);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.translate(x, y);
     ctx.rotate(q.ph + tau * q.spin);
-    ctx.scale(q.size * open * (0.15 + 0.85 * Math.abs(flip)), q.size * open);
-    ctx.globalAlpha = q.alpha * Math.min(1, tau / 0.1);
-    ctx.filter = q.blur ? `blur(${q.blur}px)` : 'none';
+    ctx.scale(z * q.size * open * (0.15 + 0.85 * Math.abs(flip)), z * q.size * open);
+    ctx.globalAlpha = q.alpha * Math.min(1, tau / 0.1) * (R.p < 0.9 ? lerp(1, 0.75, pick) : 1);
+    ctx.filter = blur > 0.3 ? `blur(${blur.toFixed(1)}px)` : 'none';
     ctx.drawImage(PETAL_ART[q.sprite], -36, -36);
   }
   ctx.globalAlpha = 1;
   ctx.filter = 'none';
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 const clamp01 = (x) => Math.min(1, Math.max(0, x));
 let PETAL_ART, PETALS;
