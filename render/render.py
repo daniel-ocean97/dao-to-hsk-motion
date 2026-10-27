@@ -77,7 +77,8 @@ def render_frames(html: Path, frames_dir: Path, fps: int, times: list[float] | N
         browser = launch(p)
         page = browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
         page.goto(url(html) + "?render")
-        page.wait_for_function("typeof window.renderAt === 'function'")
+        # scenes may paint their layers for a while before they are ready
+        page.wait_for_function("typeof window.renderAt === 'function'", timeout=180_000)
         duration = page.evaluate("window.DURATION")
         if times is None:
             count = round(duration * fps)
