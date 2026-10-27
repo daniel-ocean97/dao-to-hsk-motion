@@ -39,8 +39,9 @@
   const b = {
     size: [2000, 1116],
     anchor: [970, 1085],
-    // pose-b-turn.webp is an edit of pose-b.webp: everything matches except the head, the hair
-    // on the shoulders and the sash ends (shifted). Only the head region is taken from it.
+    // pose-b-turn.webp is an edit of pose-b.webp: the head and the hair down to the waist change,
+    // the sleeves are redrawn slightly and the sash ends shift. A cut through the sleeves shows as
+    // a step, so the turn swaps the whole picture; the sash ends then just flick in the wind.
     images: { base: DIR + 'pose-b.webp', turn: DIR + 'pose-b-turn.webp' },
     regions: {
       hair: { feather: 22, poly: [[940, 120], [900, 250], [870, 320], [840, 420], [820, 470], [780, 470], [790, 380], [850, 280], [900, 180]] },
@@ -49,8 +50,9 @@
       sleeveL: { feather: 15, poly: [[825, 520], [880, 530], [890, 600], [835, 600]] },
       sleeveR: { feather: 15, poly: [[1150, 510], [1205, 540], [1200, 600], [1140, 595]] },
       chest: { feather: 40, poly: [[840, 0], [1200, 0], [1200, 440], [840, 440]] },
-      // above the sash knot, so the sash always comes from pose-b.webp
-      head: { feather: 25, poly: [[880, 20], [1130, 20], [1145, 250], [1130, 425], [890, 425], [860, 300]] },
+      all: { feather: 1, poly: [[0, 0], [2000, 0], [2000, 1116], [0, 1116]] },
+      // what the turn changes (head and hair to the waist): left out when matching the tones
+      head: { feather: 20, poly: [[870, 20], [1140, 20], [1185, 240], [1192, 440], [1095, 440], [1090, 428], [940, 428], [935, 485], [810, 485], [780, 330], [840, 200]] },
     },
     deformers: [
       { type: 'flow', region: 'hair', root: [980, 150], tip: [800, 450], amp: 0.007, freq: 0.5, lag: 2.0, seed: 4 },
@@ -60,7 +62,9 @@
       { type: 'flow', region: 'sleeveR', root: [1150, 300], tip: [1190, 590], amp: 0.003, freq: 0.62, lag: 1.4, seed: 8 },
       { type: 'breath', region: 'chest', pivotY: 440, topY: 50, amp: 0.0065, period: 4.4, seed: 1 },
     ],
-    swaps: { turn: 'head' },
+    swaps: { turn: 'all' },
+    // the edit came back lighter and cooler: tone it to pose B
+    match: { turn: { ref: 'base', exclude: 'head' } },
     soft: ['hair'],
   };
 

@@ -24,7 +24,7 @@
 <script>
 // Pose B from the generator (characters/rita/art/pose-b.webp) in the finale setting:
 //   0.0-6.0  dawn, slow crane up; steady wind in hair, sash, sleeves and hem, breath
-//   3.0-3.5  she turns her head over the shoulder (head region of pose-b-turn.webp)
+//   3.0-3.5  she turns her head over the shoulder (pose-b-turn.webp fades in, toned to pose B)
 // ?debug shows the mesh and the bent regions; ?debug=turn also the swapped region.
 const { ease, lerp, progress } = DH;
 const { C, defs, layer, landscape, rock, pine, paper } = DH.ink;
@@ -45,7 +45,7 @@ function renderAt(t) {
   back.innerHTML = defs + landscape(cam, t, { horizon: 700, dawn: true, sun: { x: 900, y: 590 } }) +
     `<g transform="${layer(cam, 1)}">${rock(RITA.x, RITA.y - 8, 620)}</g>`;
   front.innerHTML = `<g transform="${layer(cam, 1.7)}">${pine(-60, -30, 1.3, t, true)}</g>${paper}`;
-  // the turned head fades in over the head region and stays; the rest is always pose B
+  // the turned picture fades in and stays
   const turn = ease.draw(progress(t, 3.0, 3.5));
   rig.drawAt({ t, swap: { to: 'turn', k: turn }, debug }, { cam, ...RITA });
 }

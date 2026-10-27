@@ -149,7 +149,7 @@
   // opt.soft: regions where alpha follows the density of paint instead of the outline:
   // fine strands of hair, where paper between the strands must turn transparent.
   function cutOut(im, opt) {
-    const w = im.naturalWidth, h = im.naturalHeight;
+    const w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
     const cv = document.createElement('canvas');
     cv.width = w; cv.height = h;
     const ctx = cv.getContext('2d', { willReadFrequently: true });
@@ -177,6 +177,42 @@
       d[k + 3] = a * 255;
     }
     return data;
+  }
+
+  // An image (or canvas) drawn onto a fresh canvas, for reading and changing pixels.
+  function toCanvas(im) {
+    const cv = document.createElement('canvas');
+    cv.width = im.naturalWidth || im.width; cv.height = im.naturalHeight || im.height;
+    cv.getContext('2d', { willReadFrequently: true }).drawImage(im, 0, 0);
+    return cv;
+  }
+
+  // An edit of an image (head turn) often comes back lighter or tinted as a whole.
+  // Scale each channel of src so its mean matches ref on the painted pixels outside
+  // the region the edit was meant to change, and apply it to all of src. A plain gain:
+  // a full linear fit over the narrow range of dress tones went grey and unstable.
+  function matchColors(src, ref, exclude) {
+    const w = src.width, h = src.height;
+    const sd = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h);
+    const rd = ref.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+    const s = sd.data, fit = [];
+    for (let c = 0; c < 3; c++) {
+      let n = 0, sx = 0, sy = 0;
+      for (let y = 0; y < h; y += 2) {
+        for (let x = 0; x < w; x += 2) {
+          const i = y * w + x, k = i * 4;
+          if (exclude[i] > 8) continue;
+          // painted pixels only: plain paper would pull the fit towards "no change"
+          if (Math.min(rd[k], rd[k + 1], rd[k + 2]) > 235) continue;
+          const xv = s[k + c], yv = rd[k + c];
+          n++; sx += xv; sy += yv;
+        }
+      }
+      fit.push(n > 100 && sx > 0 ? sy / sx : 1);
+    }
+    for (let i = 0; i < s.length; i += 4) for (let c = 0; c < 3; c++) s[i + c] = s[i + c] * fit[c];
+    src.getContext('2d').putImageData(sd, 0, 0);
+    return src;
   }
 
   // ---------- Regions ----------
@@ -327,7 +363,8 @@
   // ---------- Rig ----------
 
   // cfg: { size: [w, h], anchor: [x, y], images: { name: url }, regions: { name: { poly, feather } },
-  //        deformers: [...], swaps: { image: region }, solid: [region], soft: [region],
+  //        deformers: [...], swaps: { image: region }, match: { image: { ref, exclude } },
+  //        solid: [region], soft: [region],
   //        cell, threshold, close, inset }
   async function load(cfg, opt = {}) {
     const base = opt.base || '';
@@ -350,8 +387,14 @@
       solid: (cfg.solid || []).map((k) => regions[k]),
       soft: (cfg.soft || []).map((k) => regions[k]),
     };
+    // match: { image: { ref: image, exclude: region } } — tone an edited image to the one it was
+    // edited from, comparing them outside the region the edit changed
+    const art = Object.fromEntries(names.map((k, i) => [k, imgs[i]]));
+    for (const [k, m] of Object.entries(cfg.match || {})) {
+      art[k] = matchColors(toCanvas(art[k]), toCanvas(art[m.ref]), polyMask([regions[m.exclude]], W, H, true));
+    }
     const tex = {};
-    names.forEach((k, i) => { tex[k] = texture(gl, cutOut(imgs[i], cut), true); });
+    names.forEach((k) => { tex[k] = texture(gl, cutOut(art[k], cut), true); });
     const swapTex = {};
     for (const [k, rname] of Object.entries(cfg.swaps || {})) {
       const r = regions[rname];
