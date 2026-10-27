@@ -187,30 +187,79 @@
     return cv;
   }
 
-  // An edit of an image (head turn) often comes back lighter or tinted as a whole.
-  // Scale each channel of src so its mean matches ref on the painted pixels outside
-  // the region the edit was meant to change, and apply it to all of src. A plain gain:
-  // a full linear fit over the narrow range of dress tones went grey and unstable.
-  function matchColors(src, ref, exclude) {
+  // An edit of an image (head turn) often comes back lighter or tinted, and not evenly:
+  // one gain for the whole picture darkens some parts and leaves others light. So the tone
+  // is matched locally: per cell of ~cell px, src is scaled per channel to ref's mean,
+  // compared on all pixels outside the region the edit was meant to change (light washes
+  // too: a gain fitted on dark paint alone over-darkens them). Cells
+  // without data (that region, plain paper) take their neighbours' values; the field is
+  // smoothed and applied with bilinear interpolation, so brush detail stays untouched.
+  function matchColors(src, ref, exclude, cell = 24) {
     const w = src.width, h = src.height;
     const sd = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h);
     const rd = ref.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
-    const s = sd.data, fit = [];
-    for (let c = 0; c < 3; c++) {
-      let n = 0, sx = 0, sy = 0;
-      for (let y = 0; y < h; y += 2) {
-        for (let x = 0; x < w; x += 2) {
-          const i = y * w + x, k = i * 4;
-          if (exclude[i] > 8) continue;
-          // painted pixels only: plain paper would pull the fit towards "no change"
-          if (Math.min(rd[k], rd[k + 1], rd[k + 2]) > 235) continue;
-          const xv = s[k + c], yv = rd[k + c];
-          n++; sx += xv; sy += yv;
+    const s = sd.data, gw = Math.ceil(w / cell), gh = Math.ceil(h / cell), n = gw * gh;
+    const sumS = new Float32Array(n * 3), sumR = new Float32Array(n * 3), cnt = new Float32Array(n);
+    for (let y = 0; y < h; y += 2) {
+      for (let x = 0; x < w; x += 2) {
+        const i = y * w + x, k = i * 4;
+        if (exclude[i] > 8) continue;
+        const g = ((y / cell) | 0) * gw + ((x / cell) | 0);
+        cnt[g]++;
+        for (let c = 0; c < 3; c++) { sumS[g * 3 + c] += s[k + c]; sumR[g * 3 + c] += rd[k + c]; }
+      }
+    }
+    // per-cell gain; global gain as the starting value of empty cells
+    const total = [0, 1, 2].map((c) => {
+      let a = 0, b = 0;
+      for (let g = 0; g < n; g++) { a += sumR[g * 3 + c]; b += sumS[g * 3 + c]; }
+      return b > 0 ? a / b : 1;
+    });
+    let gain = new Float32Array(n * 3);
+    const known = new Uint8Array(n);
+    for (let g = 0; g < n; g++) {
+      known[g] = cnt[g] >= 20 ? 1 : 0;
+      for (let c = 0; c < 3; c++) {
+        gain[g * 3 + c] = known[g] ? clamp(sumR[g * 3 + c] / Math.max(1, sumS[g * 3 + c]), 0.6, 1.4) : total[c];
+      }
+    }
+    // fill empty cells from known neighbours, then smooth everything
+    const pass = (fixKnown) => {
+      const next = new Float32Array(gain);
+      for (let gy = 0; gy < gh; gy++) {
+        for (let gx = 0; gx < gw; gx++) {
+          const g = gy * gw + gx;
+          if (fixKnown && known[g]) continue;
+          for (let c = 0; c < 3; c++) {
+            let a = 0, m = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) {
+                const xx = gx + dx, yy = gy + dy;
+                if (xx < 0 || yy < 0 || xx >= gw || yy >= gh) continue;
+                a += gain[(yy * gw + xx) * 3 + c]; m++;
+              }
+            }
+            next[g * 3 + c] = a / m;
+          }
         }
       }
-      fit.push(n > 100 && sx > 0 ? sy / sx : 1);
+      gain = next;
+    };
+    for (let i = 0; i < 40; i++) pass(true);
+    for (let i = 0; i < 2; i++) pass(false);
+    // bilinear field over cell centres
+    for (let y = 0; y < h; y++) {
+      const fy = clamp(y / cell - 0.5, 0, gh - 1), y0 = Math.floor(fy), y1 = Math.min(gh - 1, y0 + 1), ty = fy - y0;
+      for (let x = 0; x < w; x++) {
+        const fx = clamp(x / cell - 0.5, 0, gw - 1), x0 = Math.floor(fx), x1 = Math.min(gw - 1, x0 + 1), tx = fx - x0;
+        const k = (y * w + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          const top = gain[(y0 * gw + x0) * 3 + c] * (1 - tx) + gain[(y0 * gw + x1) * 3 + c] * tx;
+          const bot = gain[(y1 * gw + x0) * 3 + c] * (1 - tx) + gain[(y1 * gw + x1) * 3 + c] * tx;
+          s[k + c] = s[k + c] * (top * (1 - ty) + bot * ty);
+        }
+      }
     }
-    for (let i = 0; i < s.length; i += 4) for (let c = 0; c < 3; c++) s[i + c] = s[i + c] * fit[c];
     src.getContext('2d').putImageData(sd, 0, 0);
     return src;
   }
@@ -512,5 +561,5 @@
     return rig;
   }
 
-  DH.rig = { load, regionWeight, cutOut };
+  DH.rig = { load, regionWeight, cutOut, matchColors, toCanvas, polyMask };
 })(window);
