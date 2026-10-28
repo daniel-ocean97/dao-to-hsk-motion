@@ -22,16 +22,19 @@
 <script src="scenes/prologue.js"></script>
 <script src="scenes/places.js"></script>
 <script>
-// intro-01, draft assembly (docs/intro-01-storyboard.md). So far 0-7.5 s:
+// intro-01, draft assembly (docs/intro-01-storyboard.md). So far 0-10 s:
 //   0.0-5.0  scenes 1-2, prologue and gust (scenes/prologue.js)
 //   4.6-5.4  a sheet of paper passes through the frame from right to left: its front edge
 //            covers the gust, its back edge uncovers the wall
 //   5.0-7.5  scene 3, the Great Wall (scenes/places.js)
+//   7.0-8.3  mist rises over the wall, its ridge stays as an ink silhouette that turns into
+//            the karst peaks of Guilin, the mist clears
+//   7.5-10.0 scene 4, Guilin
 // Each scene draws into its own buffer; renderAt(t) picks the scenes for time t and
 // composes them. Painting all the layers takes a few minutes before the first frame.
 const { ease, lerp, progress } = DH;
 const W = DH.wc;
-const DURATION = 7.5, PAPER = '#f5f2ec';
+const DURATION = 10, PAPER = '#f5f2ec';
 const out = document.getElementById('out').getContext('2d');
 const buf = W.canvas(1920, 1080).getContext('2d');
 
@@ -64,12 +67,69 @@ function fillSoft(ctx, poly, color, blur) {
   ctx.filter = 'none';
 }
 
+// ---------- the ridges turn into peaks ----------
+
+const MIST = '#f1f0ec', SIL = '#6f7a80', SIL_EDGE = '#3e3a36';
+
+// The mist over the wall-Guilin cut: rises, stays thick while the scenes swap, clears.
+const mistK = (t) => 0.93 * ease.draw(progress(t, 7.0, 7.45)) * (1 - ease.draw(progress(t, 7.85, 8.3)));
+
+function mist(ctx, a) {
+  if (a <= 0) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const g = ctx.createLinearGradient(0, 0, 0, 1080);
+  g.addColorStop(0, W.rgba(MIST, a * 0.85));
+  g.addColorStop(1, W.rgba(MIST, a));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 1920, 1080);
+}
+
+// The silhouette over the mist: the wall's ridge, then morphing into the tall karst peaks.
+function ridgeMorph(ctx, t) {
+  const a = 0.8 * ease.out(progress(t, 7.15, 7.45)) * (1 - ease.draw(progress(t, 7.9, 8.3)));
+  if (a <= 0) return;
+  const A = wall.silhouette(t - 5), B = guilin.silhouette(t - 7.5);
+  const m = ease.draw(progress(t, 7.45, 7.85));
+  const pts = [];
+  for (let i = 0, x = -100; i < A.length; i++, x += 8) {
+    const ya = A[i] ?? 1100, yb = B[i] ?? 1100;
+    pts.push([x, lerp(ya, yb, m)]);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // the body of the hills: a wash that fades downwards into the mist
+  const top = Math.min(...pts.map((p) => p[1]));
+  const g = ctx.createLinearGradient(0, top, 0, top + 420);
+  g.addColorStop(0, W.rgba(SIL, a * 0.6));
+  g.addColorStop(1, W.rgba(SIL, 0));
+  ctx.fillStyle = g;
+  ctx.filter = 'blur(2px)';
+  W.fillPoly(ctx, [...pts, [2020, 1180], [-100, 1180]]);
+  // the ink line along the crest
+  ctx.strokeStyle = W.rgba(SIL_EDGE, a * 0.55);
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.filter = 'blur(0.6px)';
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.stroke();
+  ctx.filter = 'none';
+}
+
 // ---------- timeline ----------
 
-let prologue, wall;
+let prologue, wall, guilin;
 function renderAt(t) {
   t = Math.min(Math.max(t, 0), DURATION - 1e-6);
   out.setTransform(1, 0, 0, 1, 0, 0);
+  if (t >= 7.0) {
+    // under the thickest mist (7.65 s) the wall gives way to Guilin
+    if (t < 7.65) wall.frame(out, t - 5);
+    else guilin.frame(out, t - 7.5);
+    mist(out, mistK(t));
+    ridgeMorph(out, t);
+    out.setTransform(1, 0, 0, 1, 0, 0);
+    return;
+  }
   const s = sheet(t);
   if (t < 4.98) prologue.frame(out, t);
   else if (!s) { wall.frame(out, t - 5); return; }
@@ -104,7 +164,7 @@ function renderAt(t) {
 }
 
 (async () => {
-  [prologue, wall] = await Promise.all([SCENES.prologue({ wipe: false }), SCENES.place('wall')]);
+  [prologue, wall, guilin] = await Promise.all([SCENES.prologue({ wipe: false }), SCENES.place('wall'), SCENES.place('guilin')]);
   document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
   window.DURATION = DURATION;
   window.renderAt = renderAt;

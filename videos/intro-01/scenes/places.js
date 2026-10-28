@@ -216,6 +216,7 @@
       const near = W.ridge({ x0: -240, x1: 2160, base: 1010, jag: 16, seed: 75, step: 8, peaks: [
         { x: 260, h: 260, wl: 420, wr: 300, k: 1.15 }, { x: 900, h: 160, w: 300 }, { x: 1600, h: 330, wl: 360, wr: 420, k: 1.1 },
       ] });
+      RIDGE = { pts: midR, p: 0.5 }; // the ridge the wall runs on: the silhouette for the cut
       begin('far', 0.2);
       const L1 = range({ oy: 260, ridge: far, color: '#c9cbc6', deep: '#b0b5b0', fadeTo: 640, seed: 74, under: '#ece9e2' });
       ctx.drawImage(L1.c, L1.ox, L1.oy);
@@ -280,8 +281,7 @@
     // The brush runs ahead of the camera and writes the wall from left to right; towers appear
     // as the line reaches them. The camera flies along with a slight push-in.
     function frameWall(t) {
-      const k = DH.ease.draw(DH.progress(t, 0, DURATION));
-      const cam = { x: DH.lerp(-110, 130, k), y: DH.lerp(10, -10, k), zoom: DH.lerp(1.03, 1.12, k) };
+      const cam = CAMS.wall(t);
       // even pace, so the brush is seen writing the whole way, not dashing off at the start
       const head = DH.lerp(-120, 2120, DH.ease.draw(DH.progress(t, 0.05, 2.3)));
       show('sky', cam); show('far', cam);
@@ -422,6 +422,7 @@
       // tall peaks far away in the haze, lower hills in front of them (as along the Li river)
       const far = karstRow({ x0: -240, x1: 2160, base: HZ, hMin: 230, hMax: 470, gap: 200, seed: 91 });
       const mid = karstRow({ x0: -240, x1: 2160, base: HZ + 6, hMin: 90, hMax: 230, gap: 170, seed: 93 });
+      RIDGE = { pts: far, p: 0.2 }; // the tall peaks: the silhouette for the cut
       begin('far', 0.2);
       const L1 = range({ oy: 100, h: 800, ridge: far, color: '#c3c9cf', deep: '#a7b0b8', fadeTo: HZ + 10, seed: 92, under: '#ebeceb' });
       ctx.drawImage(L1.c, L1.ox, L1.oy);
@@ -467,8 +468,7 @@
     // Peaks come out of the mist one after another from left to right; the camera glides low
     // over the river; the boat moves slowly to the left, bobbing, ripples spread from the pole.
     function frameGuilin(t) {
-      const k = DH.ease.draw(DH.progress(t, 0, DURATION));
-      const cam = { x: DH.lerp(-40, 90, k), y: DH.lerp(20, 0, k), zoom: DH.lerp(1.0, 1.1, k) };
+      const cam = CAMS.guilin(t);
       const front = DH.lerp(-200, 2600, DH.ease.draw(DH.progress(t, 0, 2.2)));
       show('sky', cam);
       const img = masked('far', (m) => {
@@ -762,8 +762,7 @@
     // The camera moves towards Pudong with a slow rise; windows light up bucket by bucket and
     // the glow grows with them; near the end the sky pales towards dawn and the lights soften.
     function frameShanghai(t) {
-      const k = DH.ease.draw(DH.progress(t, 0, DURATION));
-      const cam = { x: DH.lerp(-30, 40, k), y: DH.lerp(40, -30, k), zoom: DH.lerp(1.0, 1.13, k) };
+      const cam = CAMS.shanghai(t);
       const dawn = smooth(DH.progress(t, 1.6, 2.5));
       const on = (i) => smooth(DH.progress(t, 0.1 + i * 0.32, 0.55 + i * 0.32)) * (1 - 0.4 * dawn);
       show('sky', cam);
@@ -813,6 +812,29 @@
     }
 
 
+    // The camera of each place at time t (the cuts between scenes need it too).
+    const CAMS = {
+      wall: (t) => { const k = DH.ease.draw(DH.progress(t, 0, DURATION)); return { x: DH.lerp(-110, 130, k), y: DH.lerp(10, -10, k), zoom: DH.lerp(1.03, 1.12, k) }; },
+      guilin: (t) => { const k = DH.ease.draw(DH.progress(t, 0, DURATION)); return { x: DH.lerp(-40, 90, k), y: DH.lerp(20, 0, k), zoom: DH.lerp(1.0, 1.1, k) }; },
+      shanghai: (t) => { const k = DH.ease.draw(DH.progress(t, 0, DURATION)); return { x: DH.lerp(-30, 40, k), y: DH.lerp(40, -30, k), zoom: DH.lerp(1.0, 1.13, k) }; },
+    };
+    let RIDGE = null;
+
+    // The silhouette of the place at time t in frame coords: y of its main ridge at each x
+    // from -100 to 2020 (step 8), or null where the ridge does not reach.
+    function silhouette(t) {
+      if (!RIDGE) return null;
+      const cam = CAMS[PLACE](Math.min(Math.max(t, 0), DURATION)), z = 1 + (cam.zoom - 1) * RIDGE.p;
+      const sc = RIDGE.pts.map(([x, y]) => [960 + z * (x - 960 - cam.x * RIDGE.p), 540 + z * (y - 540 - cam.y * RIDGE.p)]);
+      const ys = [];
+      for (let x = -100, i = 0; x <= 2020; x += 8) {
+        while (i < sc.length - 2 && sc[i + 1][0] < x) i++;
+        const [ax, ay] = sc[i], [bx, by] = sc[i + 1];
+        ys.push(x < ax || x > bx ? null : ay + (by - ay) * ((x - ax) / (bx - ax || 1)));
+      }
+      return ys;
+    }
+
     const PAINT = { wall: paintWall, guilin: paintGuilin, shanghai: paintShanghai };
     const FRAME = { wall: frameWall, guilin: frameGuilin, shanghai: frameShanghai };
     PAINT[PLACE]();
@@ -832,6 +854,6 @@
       dst.setTransform(1, 0, 0, 1, 0, 0);
       dst.drawImage(out.canvas, 0, 0);
     }
-    return { DURATION, frame };
+    return { DURATION, frame, silhouette };
   };
 })(window);

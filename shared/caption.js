@@ -151,6 +151,7 @@
   // The caption mirrored in water: drawn into a buffer, flipped about the water line
   // (`below` px under its foot) and laid down in thin rows that waver and fade with depth.
   const buf = canvas(16, 16), bx = buf.getContext('2d');
+  const rbuf = canvas(16, 16), rx = rbuf.getContext('2d');
   function reflect(c, cap, t, o, { below = 14, alpha = 0.3, waver = 3, depth = 260 } = {}) {
     const wind = o.wind || [520, -60], m = 30;
     const [x0, y0, x1, y1] = cap.box;
@@ -165,8 +166,13 @@
     bx.filter = 'none';
     bx.globalAlpha = 1;
     const line = cap.foot + below; // water line, caption coordinates
-    c.save();
-    c.filter = 'blur(1.5px)';
+    // the mirrored rows go into a second buffer (rx row = depth under the water line), which
+    // is then blurred once: a blur on every row draw made a frame ~2 s slower
+    const rh = Math.ceil(depth), rw = w + 2 * (waver + 2);
+    if (rbuf.width < rw) rbuf.width = rw;
+    if (rbuf.height < rh) rbuf.height = rh;
+    rx.setTransform(1, 0, 0, 1, 0, 0);
+    rx.clearRect(0, 0, rbuf.width, rbuf.height);
     for (let yb = 0, row = 3; yb < h; yb += row) {
       const ly = yb - oy; // caption y of this buffer row
       const dist = line - ly; // the row is this far above the water line, its image as far below
@@ -174,9 +180,14 @@
       const fade = 1 - dist / depth;
       if (fade <= 0) continue;
       const dx = Math.sin(dist * 0.11 + t * 2.4) * (0.5 + waver * dist / depth);
-      c.globalAlpha = alpha * fade;
-      c.drawImage(buf, 0, yb, w, row, o.x - ox + dx, o.y + line + dist - row, w, row);
+      rx.globalAlpha = fade;
+      rx.drawImage(buf, 0, yb, w, row, waver + 2 + dx, dist - row, w, row);
     }
+    rx.globalAlpha = 1;
+    c.save();
+    c.filter = 'blur(1.5px)';
+    c.globalAlpha = alpha;
+    c.drawImage(rbuf, 0, 0, rw, rh, o.x - ox - waver - 2, o.y + line, rw, rh);
     c.restore();
   }
 
