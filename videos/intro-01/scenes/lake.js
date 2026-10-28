@@ -105,9 +105,11 @@
     ctx.drawImage(sunFrame, 0, 0);
   }
 
-  // Backlight: where the sun is behind the crest, the crest glows, a warm rim of light that
-  // is brightest next to the sun and strongest while the sun is still low (it is clearing
-  // the ridge); a faint bloom spills over the crest into the sky.
+  // Backlight, in the sun's own colour: where the sun is behind the crest, a thin rim of its
+  // light along the crest, brightest next to the sun and strongest while the sun is still
+  // low (it is clearing the ridge); and a faint wash of its light over the slopes under it.
+  const mix = (a, b, k) => { const A = W.hexRgb(a), B = W.hexRgb(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, '0')).join(''); };
+  const RIM = mix(W.SUN_COLOR, '#fbeee4', 0.55);
   function rimLight(ctx, L, cam, sunY) {
     const s = L.pal.sun, z = 1 + (cam.zoom - 1) * L.sun.p;
     const cx = 960 + z * (s.x - 960 - cam.x * L.sun.p), cy = 540 + z * (s.y + sunY - 540 - cam.y * L.sun.p), R = s.rad * z;
@@ -123,18 +125,27 @@
     if (k <= 0.01) return;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // the light on the slopes: barely there, only below the crest
+    ctx.save();
+    ctx.beginPath();
+    [...ridge, [2400, 1200], [-400, 1200]].forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    ctx.clip();
+    const G = R * 4.5, gr = ctx.createRadialGradient(cx, crest, 0, cx, crest, G);
+    gr.addColorStop(0, W.rgba(W.SUN_COLOR, 0.1 * k)); gr.addColorStop(1, W.rgba(W.SUN_COLOR, 0));
+    ctx.fillStyle = gr;
+    ctx.fillRect(cx - G, crest - G, 2 * G, 2 * G);
+    ctx.restore();
+    // the thin rim along the crest
     ctx.lineJoin = ctx.lineCap = 'round';
-    for (const [width, blur, color, alpha] of [[16, 9, '#f3d4c4', 0.35], [3.2, 0.8, '#fbeee4', 0.9]]) {
-      ctx.filter = `blur(${blur}px)`;
-      ctx.lineWidth = width;
-      for (let i = 0; i < ridge.length - 1; i++) {
-        const [ax, ay] = ridge[i], [bx, by] = ridge[i + 1];
-        const d = Math.hypot((ax + bx) / 2 - cx, (ay + by) / 2 - cy);
-        if (d > reach) continue;
-        const a = alpha * k * Math.pow(1 - d / reach, 1.6);
-        ctx.strokeStyle = W.rgba(color, a);
-        ctx.beginPath(); ctx.moveTo(ax, ay + 1); ctx.lineTo(bx, by + 1); ctx.stroke();
-      }
+    ctx.filter = 'blur(0.7px)';
+    ctx.lineWidth = 2.6;
+    for (let i = 0; i < ridge.length - 1; i++) {
+      const [ax, ay] = ridge[i], [bx, by] = ridge[i + 1];
+      const d = Math.hypot((ax + bx) / 2 - cx, (ay + by) / 2 - cy);
+      if (d > reach) continue;
+      ctx.strokeStyle = W.rgba(RIM, 0.85 * k * Math.pow(1 - d / reach, 1.6));
+      ctx.beginPath(); ctx.moveTo(ax, ay + 1); ctx.lineTo(bx, by + 1); ctx.stroke();
     }
     ctx.restore();
   }

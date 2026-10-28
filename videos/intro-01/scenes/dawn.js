@@ -224,7 +224,7 @@
       if (glow > 0) {
         // its own soft golden light behind it
         const gr = out.createRadialGradient(0, 0, 0, 0, 0, 34);
-        gr.addColorStop(0, W.rgba('#f7cf92', 0.55 * glow)); gr.addColorStop(1, W.rgba('#f7cf92', 0));
+        gr.addColorStop(0, W.rgba('#f7cf92', 0.25 * glow)); gr.addColorStop(1, W.rgba('#f7cf92', 0));
         out.fillStyle = gr;
         out.fillRect(-34, -34, 68, 68);
       }
@@ -243,13 +243,13 @@
       out.setTransform(1, 0, 0, 1, 0, 0);
       if (side === 'back' && g > 0) {
         const R = 190 * z, gr = out.createRadialGradient(hx, hy, 0, hx, hy, R);
-        gr.addColorStop(0, W.rgba('#fbe2b8', 0.8 * g)); gr.addColorStop(0.5, W.rgba('#f4cf9c', 0.42 * g)); gr.addColorStop(1, W.rgba('#f3e3e5', 0));
+        gr.addColorStop(0, W.rgba('#fbe2b8', 0.32 * g)); gr.addColorStop(0.5, W.rgba('#f4cf9c', 0.15 * g)); gr.addColorStop(1, W.rgba('#f3e3e5', 0));
         out.fillStyle = gr;
         out.fillRect(hx - R, hy - R, 2 * R, 2 * R);
       }
       if (side === 'hair' && g > 0) {
         const R = 120 * z, gr = out.createRadialGradient(hx, hy - 10 * z, 0, hx, hy - 10 * z, R);
-        gr.addColorStop(0, W.rgba('#f2c48a', 0.34 * g)); gr.addColorStop(1, W.rgba('#f2c48a', 0));
+        gr.addColorStop(0, W.rgba('#f2c48a', 0.12 * g)); gr.addColorStop(1, W.rgba('#f2c48a', 0));
         out.globalCompositeOperation = 'screen';
         out.fillStyle = gr;
         out.fillRect(hx - R, hy - R, 2 * R, 2 * R);

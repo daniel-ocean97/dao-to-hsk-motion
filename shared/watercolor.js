@@ -375,6 +375,7 @@
   }
 
   // Sun: a wet blob of wine pigment with a soft bloom.
+  const SUN_COLOR = '#a0303f';
   function sun({ x, y, rad, seed = 9 }) {
     const c = canvas(rad * 6, rad * 6), ctx = c.getContext('2d');
     const ox = x - rad * 3, oy = y - rad * 3;
@@ -385,7 +386,7 @@
     ctx.fillStyle = glow;
     ctx.fillRect(ox, oy, rad * 6, rad * 6);
     const circle = Array.from({ length: 16 }, (_, i) => [x + Math.cos(i / 16 * Math.PI * 2) * rad, y + Math.sin(i / 16 * Math.PI * 2) * rad, 0.06]);
-    wash(ctx, circle, '#a0303f', { layers: 24, alpha: 0.07, seed });
+    wash(ctx, circle, SUN_COLOR, { layers: 24, alpha: 0.07, seed });
     return { canvas: c, ox, oy };
   }
 
@@ -423,5 +424,5 @@
     return c;
   }
 
-  DH.wc = { rng, noise1, fbm, canvas, rgba, hexRgb, fillPoly, deform, wash, granulate, blooms, fadeDown, taper, dryStroke, ridge, peakRow, mountains, rock, pineBranch, sun, mistBand, paperSheet };
+  DH.wc = { rng, noise1, fbm, canvas, rgba, hexRgb, fillPoly, deform, wash, granulate, blooms, fadeDown, taper, dryStroke, ridge, peakRow, mountains, rock, pineBranch, sun, SUN_COLOR, mistBand, paperSheet };
 })(window);
