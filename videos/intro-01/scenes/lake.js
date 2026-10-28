@@ -101,7 +101,9 @@
       ctx.restore();
     }
     place(ctx, L.far.c, L.far.ox, L.far.oy, cam, L.far.p);
-    { const m = L.mistFar; place(ctx, m.c, m.ox + ((t * m.speed) % 400), m.oy, cam, m.p); }
+    // mist drifts slowly; no wrap-around: the bands are 1700 px wider than the frame and in
+    // 20 s they move at most ~280 px (a modulo made the band jump when t changed sign)
+    { const m = L.mistFar; place(ctx, m.c, m.ox + t * m.speed, m.oy, cam, m.p); }
     place(ctx, L.mid.c, L.mid.ox, L.mid.oy, cam, L.mid.p);
     place(ctx, L.water.c, L.water.ox, L.water.oy, cam, L.water.p);
     // reflection ripples: thin slices drawn with a small sideways wave
@@ -111,7 +113,7 @@
       ctx.setTransform(z, 0, 0, z, 960 + z * (R.ox + dx - 960 - cam.x * R.p), 540 + z * (R.oy + y - 540 - cam.y * R.p));
       ctx.drawImage(R.c, 0, y, R.c.width, 4, 0, 0, R.c.width, 4);
     }
-    { const m = L.mistLow; place(ctx, m.c, m.ox + ((t * m.speed) % 400 + 400) % 400 - 400, m.oy, cam, m.p); }
+    { const m = L.mistLow; place(ctx, m.c, m.ox + t * m.speed, m.oy, cam, m.p); }
     place(ctx, L.rock.canvas, L.rock.ox, L.rock.oy, cam, 1);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
