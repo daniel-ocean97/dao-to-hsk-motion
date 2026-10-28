@@ -29,7 +29,7 @@
     L.sky = { c: sc, ox: -960, oy: -1700, p: 0.05 };
     const far = W.ridge({ x0: X0, x1: X1, base: 615, jag: 10, seed: 3, peaks: W.peakRow({ x0: X0, x1: X1, hMin: 110, hMax: 290, gap: 320, seed: 53 }) });
     const mid = W.ridge({ x0: X0, x1: X1, base: 695, jag: 14, seed: 5, peaks: W.peakRow({ x0: X0, x1: X1, hMin: 70, hMax: 250, gap: 380, seed: 65 }) });
-    L.far = { c: W.mountains({ w, h: 520, ox, oy: 260, ridge: far, color: PAL.far[0], under: PAL.skyLow, deep: PAL.far[1], fadeTo: 700, seed: 3 }), ox, oy: 260, p: 0.25 };
+    L.far = { c: W.mountains({ w, h: 520, ox, oy: 260, ridge: far, color: PAL.far[0], under: PAL.skyLow, deep: PAL.far[1], fadeTo: 700, seed: 3 }), ox, oy: 260, p: 0.25, ridge: far };
     if (PAL.sun) L.sun = { ...W.sun(PAL.sun), p: 0.15 };
     L.mid = { c: W.mountains({ w, h: 560, ox, oy: 380, ridge: mid, color: PAL.mid[0], under: PAL.skyLow, deep: PAL.mid[1], fadeTo: 770, ink: 16, inkColor: '#3e3a36', seed: 5 }), ox, oy: 380, p: 0.55 };
     const wc = W.canvas(w, 520), wx = wc.getContext('2d');
@@ -80,6 +80,65 @@
     ctx.drawImage(img, 0, 0);
   }
 
+  // World points at depth p -> frame coords for camera cam.
+  function toFrame(pts, cam, p) {
+    const z = 1 + (cam.zoom - 1) * p;
+    return pts.map(([x, y]) => [960 + z * (x - 960 - cam.x * p), 540 + z * (y - 540 - cam.y * p)]);
+  }
+
+  // The sun goes behind the far ridge: the ridge's wash fades into the mist downwards and
+  // would let it show through like glass, so the sun is cut along the crest (soft, as a
+  // wet edge). sunFrame: the sun drawn alone into a frame-sized canvas.
+  const sunFrame = W.canvas(1920, 1080), sf = sunFrame.getContext('2d');
+  function sunBehindRidge(ctx, L, cam, sunY) {
+    sf.setTransform(1, 0, 0, 1, 0, 0);
+    sf.clearRect(0, 0, 1920, 1080);
+    place(sf, L.sun.canvas, L.sun.ox, L.sun.oy + sunY, cam, L.sun.p);
+    sf.setTransform(1, 0, 0, 1, 0, 0);
+    sf.globalCompositeOperation = 'destination-out';
+    sf.filter = 'blur(1.5px)';
+    sf.fillStyle = '#000';
+    W.fillPoly(sf, [...toFrame(L.far.ridge.map(([x, y]) => [x, y + 4]), cam, L.far.p), [2400, 1200], [-400, 1200]]);
+    sf.filter = 'none';
+    sf.globalCompositeOperation = 'source-over';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(sunFrame, 0, 0);
+  }
+
+  // Backlight: where the sun is behind the crest, the crest glows, a warm rim of light that
+  // is brightest next to the sun and strongest while the sun is still low (it is clearing
+  // the ridge); a faint bloom spills over the crest into the sky.
+  function rimLight(ctx, L, cam, sunY) {
+    const s = L.pal.sun, z = 1 + (cam.zoom - 1) * L.sun.p;
+    const cx = 960 + z * (s.x - 960 - cam.x * L.sun.p), cy = 540 + z * (s.y + sunY - 540 - cam.y * L.sun.p), R = s.rad * z;
+    const ridge = toFrame(L.far.ridge, cam, L.far.p), reach = R * 3.2;
+    // h: how much of the sun is behind the crest under it (0: its lower edge touches the
+    // crest, 1: hidden). The rim burns while it is hidden or half out, and fades as the sun
+    // clears the crest by half its size.
+    let crest = Infinity;
+    for (const [x, y] of ridge) if (Math.abs(x - cx) < R) crest = Math.min(crest, y);
+    if (crest === Infinity) return;
+    const h = (cy + R - crest) / (2 * R);
+    const k = h >= 0 ? DH.clamp(1 - (h - 1.2) / 0.8) : DH.clamp(1 + h * 2);
+    if (k <= 0.01) return;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.lineJoin = ctx.lineCap = 'round';
+    for (const [width, blur, color, alpha] of [[16, 9, '#f3d4c4', 0.35], [3.2, 0.8, '#fbeee4', 0.9]]) {
+      ctx.filter = `blur(${blur}px)`;
+      ctx.lineWidth = width;
+      for (let i = 0; i < ridge.length - 1; i++) {
+        const [ax, ay] = ridge[i], [bx, by] = ridge[i + 1];
+        const d = Math.hypot((ax + bx) / 2 - cx, (ay + by) / 2 - cy);
+        if (d > reach) continue;
+        const a = alpha * k * Math.pow(1 - d / reach, 1.6);
+        ctx.strokeStyle = W.rgba(color, a);
+        ctx.beginPath(); ctx.moveTo(ax, ay + 1); ctx.lineTo(bx, by + 1); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   // Draw the place for camera cam at time t (mist drifts; the reflection ripples).
   // sunY: how far below its painted place the sun is (it rises in the finale).
   function draw(ctx, L, cam, t, sunY = 0) {
@@ -97,10 +156,11 @@
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.beginPath(); ctx.rect(0, 0, 1920, hz); ctx.clip();
-      place(ctx, L.sun.canvas, L.sun.ox, L.sun.oy + sunY, cam, L.sun.p);
+      sunBehindRidge(ctx, L, cam, sunY);
       ctx.restore();
     }
     place(ctx, L.far.c, L.far.ox, L.far.oy, cam, L.far.p);
+    if (L.sun) rimLight(ctx, L, cam, sunY);
     // mist drifts slowly; no wrap-around: the bands are 1700 px wider than the frame and in
     // 20 s they move at most ~280 px (a modulo made the band jump when t changed sign)
     { const m = L.mistFar; place(ctx, m.c, m.ox + t * m.speed, m.oy, cam, m.p); }
