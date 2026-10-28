@@ -20,10 +20,12 @@
 <script src="../../shared/caption.js"></script>
 <script src="../../shared/preview.js"></script>
 <script src="../../characters/rita/rig-art.js"></script>
+<script src="scenes/lake.js"></script>
 <script src="scenes/prologue.js"></script>
 <script src="scenes/places.js"></script>
+<script src="scenes/dawn.js"></script>
 <script>
-// intro-01, draft assembly (docs/intro-01-storyboard.md). So far 0-12.5 s:
+// intro-01, draft assembly (docs/intro-01-storyboard.md). So far 0-15 s:
 //   0.0-5.0  scenes 1-2, prologue and gust (scenes/prologue.js)
 //   4.6-5.4  a sheet of paper passes through the frame from right to left: its front edge
 //            covers the gust, its back edge uncovers the wall
@@ -34,13 +36,18 @@
 //   9.6-10.9 night falls over Guilin, the peaks stretch up in ink and turn into the Pudong
 //            skyline, the night ebbs into the lit city
 //   10.0-12.5 scene 5, Shanghai
+//   12.2-14.8 the city lights tear off the windows as warm strokes and fly home (scenes/dawn.js)
+//   12.45-13.0 the camera turns: Shanghai slides away, the lake at dawn slides in, both
+//            blurred by the speed, through a band of dawn haze
+//   12.5-15.0 scene 6, the return: out of the mist, Rita from behind; the lights weave into
+//            her hair, the camera settles behind her shoulder
 // Each scene draws into its own buffer; renderAt(t) picks the scenes for time t and
 // composes them. Painting all the layers takes a few minutes before the first frame.
 const { ease, lerp, progress } = DH;
 const W = DH.wc;
-const DURATION = 12.5, PAPER = '#f5f2ec';
+const DURATION = 15, PAPER = '#f5f2ec';
 const out = document.getElementById('out').getContext('2d');
-const buf = W.canvas(1920, 1080).getContext('2d');
+const buf = W.canvas(1920, 1080).getContext('2d'), buf2 = W.canvas(1920, 1080).getContext('2d');
 
 // ---------- the paper pass ----------
 
@@ -167,12 +174,55 @@ function peaksToTowers(ctx, t) {
   ctx.restore();
 }
 
+// ---------- the turn back ----------
+
+// The whip pan from Shanghai to the lake: the two frames side by side with a band of dawn
+// haze between them, sliding left; blurred along x by the speed.
+const GAP = 420, TURN = [12.45, 13.0];
+const squash = W.canvas(1920, 1080), sq = squash.getContext('2d');
+// src drawn at x, blurred along x by about `amount` px: squeezed to a narrow strip and
+// stretched back (the browser smooths it), plus a light ordinary blur
+function motionBlur(ctx, src, x, amount) {
+  const f = 1 + amount / 6, w = Math.max(8, Math.round(1920 / f));
+  sq.clearRect(0, 0, 1920, 1080);
+  sq.drawImage(src, 0, 0, w, 1080);
+  ctx.filter = `blur(${(amount / 12).toFixed(1)}px)`;
+  ctx.drawImage(squash, 0, 0, w, 1080, x, 0, 1920, 1080);
+  ctx.filter = 'none';
+}
+function turnBack(t) {
+  const k = progress(t, TURN[0], TURN[1]), e = ease.draw(k), off = e * (1920 + GAP);
+  const speed = Math.sin(Math.PI * k); // 0 at both ends, fastest in the middle
+  shanghai.frame(buf, t - 10);
+  dawn.frame(buf2, t - 12.5);
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  out.fillStyle = '#c9b6bb';
+  out.fillRect(0, 0, 1920, 1080);
+  motionBlur(out, buf.canvas, -off, 180 * speed);
+  motionBlur(out, buf2.canvas, 1920 + GAP - off, 180 * speed);
+  // a broad band of dawn haze over the seam, from the night's colour to the dawn's
+  const c = 1920 + GAP / 2 - off, half = 700;
+  const g = out.createLinearGradient(c - half, 0, c + half, 0);
+  g.addColorStop(0, 'rgba(108,101,120,0)'); g.addColorStop(0.35, 'rgba(150,135,155,0.85)');
+  g.addColorStop(0.5, 'rgba(226,200,200,0.97)'); g.addColorStop(0.65, 'rgba(242,220,214,0.85)');
+  g.addColorStop(1, 'rgba(242,220,214,0)');
+  out.fillStyle = g;
+  out.fillRect(c - half, 0, 2 * half, 1080);
+}
+
 // ---------- timeline ----------
 
-let prologue, wall, guilin, shanghai;
+let prologue, wall, guilin, shanghai, dawn;
 function renderAt(t) {
   t = Math.min(Math.max(t, 0), DURATION - 1e-6);
   out.setTransform(1, 0, 0, 1, 0, 0);
+  if (t >= 12.2) {
+    if (t < TURN[0]) shanghai.frame(out, t - 10);
+    else if (t < TURN[1]) turnBack(t);
+    else dawn.frame(out, t - 12.5);
+    dawn.overlay(out, t);
+    return;
+  }
   if (t >= 9.6) {
     // under the full night flood (10.25 s) Guilin gives way to Shanghai
     if (t < 10.25) guilin.frame(out, t - 7.5);
@@ -224,7 +274,7 @@ function renderAt(t) {
 }
 
 (async () => {
-  [prologue, wall, guilin, shanghai] = await Promise.all([SCENES.prologue({ wipe: false }), SCENES.place('wall'), SCENES.place('guilin'), SCENES.place('shanghai')]);
+  [prologue, wall, guilin, shanghai, dawn] = await Promise.all([SCENES.prologue({ wipe: false }), SCENES.place('wall'), SCENES.place('guilin'), SCENES.place('shanghai'), SCENES.dawn()]);
   document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
   window.DURATION = DURATION;
   window.renderAt = renderAt;

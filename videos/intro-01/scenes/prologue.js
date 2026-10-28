@@ -22,97 +22,10 @@
     const back = W.canvas(1920, 1080), fx = W.canvas(1920, 1080);
     const bctx = back.getContext('2d'), fctx = fx.getContext('2d');
 
-    const HORIZON = 700, X0 = -400, X1 = 2400;
-    const PAL = {
-      skyTop: '#f5f2ec', skyLow: '#e4e6e8', far: ['#aeb6c2', '#8f9aab'], mid: ['#7d8593', '#5b6370'],
-      water: '#c3cad2', mist: '#f2f1ee',
-    };
+    const PAL = LAKE.PALETTES.morning, { view, place } = LAKE;
     const INK = '#24170f', HAIR = '#3a2820', PAPER = '#f5f2ec';
-
-    // ---------- the place of scene 1 (as in videos/probe-landscape, morning) ----------
-
-    function paintPlace() {
-      const L = {}, ox = X0, w = X1 - X0;
-      // the sky is painted taller than the frame: the camera flies up into it
-      const sc = W.canvas(1920 * 2, 2600), sx = sc.getContext('2d');
-      const g = sx.createLinearGradient(0, 0, 0, 2600);
-      g.addColorStop(0, '#f6f4ef'); g.addColorStop(0.62, PAL.skyTop); g.addColorStop(0.92, PAL.skyLow);
-      sx.fillStyle = g; sx.fillRect(0, 0, sc.width, sc.height);
-      L.sky = { c: sc, ox: -960, oy: -1700, p: 0.05 };
-      const far = W.ridge({ x0: X0, x1: X1, base: 615, jag: 10, seed: 3, peaks: W.peakRow({ x0: X0, x1: X1, hMin: 110, hMax: 290, gap: 320, seed: 53 }) });
-      const mid = W.ridge({ x0: X0, x1: X1, base: 695, jag: 14, seed: 5, peaks: W.peakRow({ x0: X0, x1: X1, hMin: 70, hMax: 250, gap: 380, seed: 65 }) });
-      L.far = { c: W.mountains({ w, h: 520, ox, oy: 260, ridge: far, color: PAL.far[0], under: PAL.skyLow, deep: PAL.far[1], fadeTo: 700, seed: 3 }), ox, oy: 260, p: 0.25 };
-      L.mid = { c: W.mountains({ w, h: 560, ox, oy: 380, ridge: mid, color: PAL.mid[0], under: PAL.skyLow, deep: PAL.mid[1], fadeTo: 770, ink: 16, inkColor: '#3e3a36', seed: 5 }), ox, oy: 380, p: 0.55 };
-      const wc = W.canvas(w, 520), wx = wc.getContext('2d');
-      wx.translate(-ox, -HORIZON);
-      W.wash(wx, [[X0, HORIZON, 0.01], [X1, HORIZON, 0.01], [X1, HORIZON + 520, 0.05], [X0, HORIZON + 520, 0.05]], PAL.water, { layers: 18, alpha: 0.06, seed: 31 });
-      const r = W.rng(32);
-      wx.globalCompositeOperation = 'destination-out';
-      for (let i = 0; i < 90; i++) {
-        const y = HORIZON + 8 + Math.pow(r(), 1.6) * 400, x = X0 + r() * w, len = 60 + r() * 260;
-        W.dryStroke(wx, [[x, y], [x + len * 0.5, y + 1], [x + len, y]], 2 + r() * 4, '#000000', { alpha: 0.5, hairs: 2, dry: 0.5, seed: 40 + i });
-      }
-      // a soft top edge: when the camera flies up, the water slides away from the mountains
-      // (parallax) and a hard edge would show
-      wx.globalCompositeOperation = 'destination-out';
-      wx.setTransform(1, 0, 0, 1, 0, 0);
-      const fade = wx.createLinearGradient(0, 0, 0, 70);
-      fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
-      wx.fillStyle = fade; wx.fillRect(0, 0, w, 70);
-      L.water = { c: wc, ox, oy: HORIZON, p: 0.8 };
-      // reflection of the mountains, flipped at the horizon, soft (as in probe-landscape)
-      const rc = W.canvas(w, 360), rx = rc.getContext('2d');
-      rx.filter = 'blur(5px)';
-      rx.globalAlpha = 0.22;
-      for (const k of ['far', 'mid']) {
-        // a row at world y lands at (HORIZON - y) * 0.75 below the horizon
-        const l = L[k];
-        rx.setTransform(1, 0, 0, -0.75, l.ox - ox, 0.75 * (HORIZON - l.oy));
-        rx.drawImage(l.c, 0, 0);
-      }
-      L.reflect = { c: rc, ox, oy: HORIZON, p: 0.8 };
-      L.mistFar = { c: W.mistBand({ w: w + 800, h: 120, color: PAL.mist, seed: 13 }), ox: ox - 400, oy: 600, p: 0.35, speed: 9 };
-      L.mistLow = { c: W.mistBand({ w: w + 800, h: 130, color: PAL.mist, seed: 17 }), ox: ox - 400, oy: 640, p: 0.8, speed: -14 };
-      L.rock = W.rock({ x: 1250, y: 1012, w: 520, seed: 3 });
-      L.pine = W.pineBranch({ x: -160, y: -60, scale: 1.2, seed: 5, blur: 4 });
-      return L;
-    }
-
-    // Transform for world point space seen by camera cam at depth p (the same maths as DH.ink.layer).
-    function view(ctx, cam, p) {
-      const z = 1 + (cam.zoom - 1) * p;
-      ctx.setTransform(z, 0, 0, z, 960 + z * (-960 - cam.x * p), 540 + z * (-540 - cam.y * p));
-      return z;
-    }
-    function place(ctx, img, ox, oy, cam, p) {
-      view(ctx, cam, p);
-      ctx.transform(1, 0, 0, 1, ox, oy);
-      ctx.drawImage(img, 0, 0);
-    }
-
-    function drawPlace(L, cam, t) {
-      const ctx = bctx;
-      // start from the low sky colour, as probe-landscape: the sky does not reach the bottom
-      // of the frame, and where the water and the rock are thin the last frame showed through
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = PAL.skyLow;
-      ctx.fillRect(0, 0, 1920, 1080);
-      place(ctx, L.sky.c, L.sky.ox, L.sky.oy, cam, L.sky.p);
-      place(ctx, L.far.c, L.far.ox, L.far.oy, cam, L.far.p);
-      { const m = L.mistFar; place(ctx, m.c, m.ox + ((t * m.speed) % 400), m.oy, cam, m.p); }
-      place(ctx, L.mid.c, L.mid.ox, L.mid.oy, cam, L.mid.p);
-      place(ctx, L.water.c, L.water.ox, L.water.oy, cam, L.water.p);
-      // reflection ripples: thin slices drawn with a small sideways wave
-      const R = L.reflect, z = 1 + (cam.zoom - 1) * R.p;
-      for (let y = 0; y < R.c.height; y += 4) {
-        const dx = Math.sin(y * 0.11 + t * 2.2) * (1 + y * 0.02) + Math.sin(y * 0.031 - t * 1.3) * 2;
-        ctx.setTransform(z, 0, 0, z, 960 + z * (R.ox + dx - 960 - cam.x * R.p), 540 + z * (R.oy + y - 540 - cam.y * R.p));
-        ctx.drawImage(R.c, 0, y, R.c.width, 4, 0, 0, R.c.width, 4);
-      }
-      { const m = L.mistLow; place(ctx, m.c, m.ox + ((t * m.speed) % 400 + 400) % 400 - 400, m.oy, cam, m.p); }
-      place(ctx, L.rock.canvas, L.rock.ox, L.rock.oy, cam, 1);
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-    }
+    const paintPlace = () => LAKE.paint(PAL, { x: 1250, w: 520, seed: 3 });
+    const drawPlace = (L, cam, t) => LAKE.draw(bctx, L, cam, t);
 
     // ---------- the gust and the camera ----------
 
