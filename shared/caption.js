@@ -12,12 +12,13 @@
   const DH = g.DH;
   const { clamp, progress, ease } = DH;
 
-  const HANZI_FONT = 'DH Noto Serif SC', PINYIN_FONT = 'DH Onest';
+  const HANZI_FONT = 'DH Noto Serif SC', PINYIN_FONT = 'DH Onest', TITLE_FONT = 'DH Cormorant Garamond';
   const base = new URL('../fonts/', document.currentScript.src);
   const css = document.createElement('style');
   css.textContent = `
     @font-face { font-family: "${HANZI_FONT}"; src: url("${new URL('NotoSerifSC-subset.ttf', base)}"); font-weight: 200 900; }
-    @font-face { font-family: "${PINYIN_FONT}"; src: url("${new URL('Onest.ttf', base)}"); font-weight: 100 900; }`;
+    @font-face { font-family: "${PINYIN_FONT}"; src: url("${new URL('Onest.ttf', base)}"); font-weight: 100 900; }
+    @font-face { font-family: "${TITLE_FONT}"; src: url("${new URL('CormorantGaramond.ttf', base)}"); font-weight: 300 700; }`;
   document.head.appendChild(css);
 
   // A rough, slightly bleeding ink edge for the glyphs (seeded, so frames repeat).
@@ -32,6 +33,7 @@
   const ready = Promise.all([
     document.fonts.load(`500 100px "${HANZI_FONT}"`, '道'),
     document.fonts.load(`500 40px "${PINYIN_FONT}"`, 'dào'),
+    document.fonts.load(`500 40px "${TITLE_FONT}"`, 'Dao to HSK'),
   ]).then(() => {
     if (!document.fonts.check(`500 100px "${HANZI_FONT}"`, '道')) throw new Error('caption fonts did not load');
   });
@@ -191,5 +193,5 @@
     c.restore();
   }
 
-  DH.caption = { ready, make, draw, reflect, CHAR_GAP, CHAR_IN, PY_DELAY, PY_IN, OUT };
+  DH.caption = { ready, make, draw, reflect, TITLE_FONT, CHAR_GAP, CHAR_IN, PY_DELAY, PY_IN, OUT };
 })(window);

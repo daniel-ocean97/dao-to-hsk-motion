@@ -1,11 +1,18 @@
-// intro-01, scene 6 "the return" (12.5-15.0 s, docs/intro-01-storyboard.md); the finale will
-// continue it as one shot.
+// intro-01, scenes 6-7: the return (12.5-15.0 s) and the finale (15.0-20.0 s), one shot
+// (docs/intro-01-storyboard.md).
 //   0.0-0.5  (under the camera's turn from Shanghai) the lake at dawn, seen wide, in mist
 //   0.5-2.5  the mist thins, the rock and Rita in pose B, her back to us; the camera eases in
 //            and settles behind her shoulder, where the finale starts
 //   the city lights fly home: overlay() draws, over the cut and this scene, warm strokes that
 //   tear off the windows of Shanghai, sweep through the turn and weave into Rita's hair
 //   (with two wine-red petals); her hair and the sash ends fly up as they arrive
+//   2.5-3.7  (15.0-16.2 s) the camera cranes up over her shoulder: she sinks into the lower
+//            third, the sky opens; the sun clears the ridge, a path of light on the water;
+//            the pine near the lens slides out of the frame
+//   3.5      (16.0) 道 comes through like ink, as the place captions, and stays; dào under it
+//   4.7      (17.2) "Dao to HSK" settles like ink; the sun beside it is the seal
+//   5.0-5.5  (17.5-18.0) she turns her head over her shoulder (pose-b-turn.webp)
+//   5.5-7.5  (18.0-20.0) the frame holds: only hair, sash and water move, the wind calms
 // SCENES.dawn(opt) resolves to { frame(out, tau), overlay(out, T) }: tau is scene time
 // (0 = 12.5 s of the video), T is video time (the strokes cross the cut).
 (function (g) {
@@ -27,14 +34,35 @@
 
     // Wide while the turn passes, then it eases in and settles behind her shoulder at the
     // finale's first camera (videos/probe-pose-b).
-    const CAM0 = { x: 260, y: -30, zoom: 0.98 }, CAM1 = { x: -20, y: 40, zoom: 1.05 };
+    // In the finale it cranes up and forward over her shoulder (CAM2), then drifts a little
+    // and almost stops by 18 s: the last frame must not swim.
+    const CAM0 = { x: 260, y: -30, zoom: 0.98 }, CAM1 = { x: -20, y: 40, zoom: 1.05 }, CAM2 = { x: 10, y: -300, zoom: 1.08 };
     function camera(tau) {
-      const k = ease.out(progress(tau, 0.5, 2.5));
-      return { x: lerp(CAM0.x, CAM1.x, k), y: lerp(CAM0.y, CAM1.y, k), zoom: lerp(CAM0.zoom, CAM1.zoom, k) };
+      const k = ease.out(progress(tau, 0.5, 2.5)), c = ease.draw(progress(tau, 2.5, 3.7));
+      const d = ease.out(progress(tau, 3.7, 5.5));
+      return {
+        x: lerp(lerp(CAM0.x, CAM1.x, k), CAM2.x, c) + 12 * d,
+        y: lerp(lerp(CAM0.y, CAM1.y, k), CAM2.y, c) - 18 * d,
+        zoom: lerp(lerp(CAM0.zoom, CAM1.zoom, k), CAM2.zoom, c) + 0.01 * d,
+      };
+    }
+    const CAM_END = camera(7.5);
+    // the world point at depth p that the final camera shows at frame point (sx, sy)
+    function worldAt(sx, sy, p) {
+      const z = 1 + (CAM_END.zoom - 1) * p;
+      return [960 + (sx - 960) / z + CAM_END.x * p, 540 + (sy - 540) / z + CAM_END.y * p];
     }
 
+    // The sun: behind the ridge during the return, it clears it at 15-16.2 s and keeps
+    // rising very slowly. How far below its painted place it is:
+    const sunY = (T) => T < 15 ? lerp(190, 150, progress(T, 12.5, 15))
+      : lerp(150, -40, ease.out(progress(T, 15, 16.2))) - 15 * progress(T, 16.2, 20);
+
+    // The wind calms towards the end of the hold.
+    const windK = (T) => lerp(1, 0.55, progress(T, 17, 20));
+
     // The lights arrive at her hair about 14.3-14.7 s: a gust lifts hair and sash ends.
-    const gust = (T) => ease.out(progress(T, 14.2, 14.55)) * (1 - 0.6 * progress(T, 14.8, 15.6));
+    const gust = (T) => ease.out(progress(T, 14.2, 14.55)) * (1 - progress(T, 14.8, 16.0));
 
     function drawRita(ctx, cam, o) {
       const z = cam.zoom, scale = (z * RITA.h) / rig.H;
@@ -44,16 +72,60 @@
       ctx.drawImage(c, sx - (rig.anchor[0] + rig.pad) * scale, sy - (rig.anchor[1] + rig.pad) * scale);
     }
 
+    // A path of light on the water under the sun: warm streaks that shimmer, brighter as
+    // the sun climbs.
+    const PATH = (() => { const r = W.rng(501), a = []; for (let i = 0; i < 70; i++) a.push([r(), r(), r(), r()]); return a; })();
+    function sunPath(ctx, cam, T) {
+      const a = ease.out(progress(T, 15.3, 16.4));
+      if (a <= 0) return;
+      LAKE.view(ctx, cam, 0.8);
+      const hz = LAKE.HORIZON, sx = L.sun.ox + L.sun.canvas.width / 2;
+      for (const [u, v, w, ph] of PATH) {
+        const y = hz + 6 + Math.pow(u, 1.5) * 300, spread = 30 + (y - hz) * 0.5;
+        const x = sx + (v - 0.5) * spread * 2, len = 20 + w * 90 * (0.5 + (y - hz) / 300);
+        const flick = 0.5 + 0.5 * Math.sin(T * 3 + ph * 20);
+        ctx.fillStyle = W.rgba(u < 0.5 ? '#f6dcc8' : '#e9b9ad', a * 0.5 * flick * (1 - u * 0.6));
+        ctx.beginPath(); ctx.ellipse(x, y, len, 1.6 + u * 1.5, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
+    // 道 dào and the name: the caption of the finale, in the sky to the left of the sun.
+    await DH.caption.ready;
+    const DAO = DH.caption.make({ hanzi: '道', pinyin: 'dào', size: 250 });
+    const DAO_AT = worldAt(560, 450, 0.15), NAME_AT = worldAt(560, 655, 0.15);
+    function finaleText(ctx, cam, T) {
+      if (T < 15.9) return;
+      LAKE.view(ctx, cam, 0.15);
+      DH.caption.draw(ctx, DAO, T, { x: DAO_AT[0], y: DAO_AT[1], t0: 16.0 });
+      // "Dao to HSK" settles like ink: out of a blur, a little from above
+      const k = ease.out(progress(T, 17.2, 17.75));
+      if (k > 0) {
+        ctx.filter = k < 0.99 ? `blur(${(5 * (1 - k)).toFixed(2)}px)` : 'none';
+        ctx.globalAlpha = k;
+        ctx.font = `500 76px "${DH.caption.TITLE_FONT}"`;
+        ctx.fillStyle = '#24170f';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('Dao to HSK', NAME_AT[0], NAME_AT[1] - 10 * (1 - k));
+        ctx.filter = 'none';
+        ctx.globalAlpha = 1;
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+
     function frame(out, tau) {
       tau = Math.max(0, tau);
       const T = 12.5 + tau, cam = camera(tau);
-      // the sun is still behind the ridge; it rises in the finale
-      LAKE.draw(bctx, L, cam, T, lerp(190, 150, progress(T, 12.5, 15)));
+      LAKE.draw(bctx, L, cam, T, sunY(T));
+      sunPath(bctx, cam, T);
       out.setTransform(1, 0, 0, 1, 0, 0);
       out.drawImage(back, 0, 0);
-      const gk = gust(T);
-      drawRita(out, cam, { t: T, gust: gk, wind: 1 + 1.1 * gk });
-      LAKE.place(out, pine.canvas, pine.ox, pine.oy, cam, 1.7);
+      finaleText(out, cam, T);
+      const gk = gust(T), turn = ease.draw(progress(T, 17.5, 18.0));
+      drawRita(out, cam, { t: T, gust: gk, wind: windK(T) * (1 + 1.1 * gk), swap: { to: 'turn', k: turn } });
+      // the pine is near the lens: as the camera cranes up it slides out of the frame
+      LAKE.place(out, pine.canvas, pine.ox, pine.oy + 700 * ease.draw(progress(T, 15.0, 16.0)), cam, 1.7);
       // dawn mist: thick while the turn passes, then it thins and the rock comes out
       const m = 0.8 * (1 - ease.out(progress(tau, 0.35, 1.5)));
       if (m > 0) {

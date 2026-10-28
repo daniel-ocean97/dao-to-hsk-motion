@@ -25,7 +25,7 @@
 <script src="scenes/places.js"></script>
 <script src="scenes/dawn.js"></script>
 <script>
-// intro-01, draft assembly (docs/intro-01-storyboard.md). So far 0-15 s:
+// intro-01, draft assembly (docs/intro-01-storyboard.md), 20 s:
 //   0.0-5.0  scenes 1-2, prologue and gust (scenes/prologue.js)
 //   4.6-5.4  a sheet of paper passes through the frame from right to left: its front edge
 //            covers the gust, its back edge uncovers the wall
@@ -41,11 +41,13 @@
 //            blurred by the speed, through a band of dawn haze
 //   12.5-15.0 scene 6, the return: out of the mist, Rita from behind; the lights weave into
 //            her hair, the camera settles behind her shoulder
+//   15.0-20.0 scene 7, the finale: crane up, the sun clears the ridge, 道 dào and
+//            "Dao to HSK", she turns her head; the last 2 s hold
 // Each scene draws into its own buffer; renderAt(t) picks the scenes for time t and
 // composes them. Painting all the layers takes a few minutes before the first frame.
 const { ease, lerp, progress } = DH;
 const W = DH.wc;
-const DURATION = 15, PAPER = '#f5f2ec';
+const DURATION = 20, PAPER = '#f5f2ec';
 const out = document.getElementById('out').getContext('2d');
 const buf = W.canvas(1920, 1080).getContext('2d'), buf2 = W.canvas(1920, 1080).getContext('2d');
 
