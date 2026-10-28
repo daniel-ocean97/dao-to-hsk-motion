@@ -677,8 +677,10 @@
         fillPoly(f, poly);
         wash(f, poly, '#55506a', { layers: 8, alpha: 0.12, seed: sd, rough: 0.005 });
       };
-      for (const [dx, sd] of [[-62, 601], [62, 602]]) pole([op.x + dx, HZ], [op.x + dx * 0.12, HZ - 235], 16, 9, sd);
-      pole([op.x, HZ], [op.x, HZ - 235], 18, 14, 603);
+      // the legs and the shaft stand on the ground of the embankment (its park hides their
+      // feet), not on the old waterline: the legs spread a little wider on the way down
+      for (const [dx, sd] of [[-62, 601], [62, 602]]) pole([op.x + dx * 1.18, PROM - 4], [op.x + dx * 0.12, HZ - 235], 16, 9, sd);
+      pole([op.x, PROM - 4], [op.x, HZ - 235], 18, 14, 603);
       pole([op.x, HZ - 235], [op.x, HZ - 470], 20, 14, 604);
       pole([op.x, HZ - 470], [op.x, HZ - 600], 6, 2, 605);
       for (const [y, rad, sd] of [[HZ - 232, 62, 611], [HZ - 432, 36, 612], [HZ - 506, 14, 613]]) {
