@@ -6,11 +6,12 @@ there is no licence to check):
           its loudness breathes very slowly (no gusts); from 3.0 s, when the wind comes
           into the frame, faded in, held to the end
   rustle  short soft grains of high, band-limited noise, panned at random, while petals
-          fly: the gust (3.1-5.2 s) and the lights flying home (12.5-14.9 s)
+          fly: the gust (3.1-5.2 s) and the lights flying home (15.5-17.9 s)
 The music: the track from --music-start, faded in over --music-fade-in (the video opens
-on a drop of ink in silence), its own ending as the end of the video.
+on a drop of ink), faded out over the last --music-fade-out seconds (the track is cut
+where its own ending has almost died away).
 
-    uv run render/sound.py music/local/by-the-quiet-water-30s.mp3 --music-start 10.2
+    uv run render/sound.py music/local/by-the-quiet-water-30s.mp3 --music-start 3.88
     uv run render/render.py videos/intro-01/index.html --reuse-frames --audio out/intro-01/mix.wav
 """
 
@@ -26,9 +27,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RATE = 48000
-LENGTH = 20.0
+LENGTH = 24.4  # the video, s (videos/intro-01/index.html)
 WIND_FROM = 3.0
-PETALS = [(3.1, 5.2), (12.5, 14.9)]  # when petals fly in the frame, s
+PETALS = [(3.1, 5.2), (15.5, 17.9)]  # when petals fly in the frame, s
 
 
 def ffmpeg() -> str:
@@ -112,6 +113,7 @@ def main() -> None:
         "--music-start", type=float, default=0.0, help="start the track at this second"
     )
     ap.add_argument("--music-fade-in", type=float, default=1.0)
+    ap.add_argument("--music-fade-out", type=float, default=1.2)
     ap.add_argument("--wind", type=float, default=-16.0, help="wind level, dB")
     ap.add_argument("--rustle", type=float, default=-10.0, help="rustle level, dB")
     ap.add_argument("--out", type=Path, default=ROOT / "out" / "intro-01" / "mix.wav")
@@ -135,7 +137,8 @@ def main() -> None:
             str(r),
             "-filter_complex",
             (
-                f"[0]aresample={RATE},afade=t=in:st=0:d={args.music_fade_in},apad=whole_dur={LENGTH}[m];"
+                f"[0]aresample={RATE},afade=t=in:st=0:d={args.music_fade_in},"
+                f"afade=t=out:st={LENGTH - args.music_fade_out}:d={args.music_fade_out},apad=whole_dur={LENGTH}[m];"
                 f"[1]volume={args.wind}dB[w];[2]volume={args.rustle}dB[r];"
                 f"[m][w][r]amix=inputs=3:normalize=0,alimiter=limit=0.95,atrim=0:{LENGTH}"
             ),

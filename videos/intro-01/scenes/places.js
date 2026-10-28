@@ -6,12 +6,14 @@
 //             water, mirrored in it
 //   shanghai  the camera moves to Pudong, windows light up, the sky pales to dawn; 上海 in
 //             light ink in the night sky
-// SCENES.place(PLACE) paints the place once into layers (painting takes a while) and
-// resolves to { DURATION, frame(dst, t) }: frame moves the layers with the camera at their
-// depth, animates reveals, light and water, and draws scene time t (0..2.5) into dst.
+// SCENES.place(PLACE, { duration }) paints the place once into layers (painting takes a
+// while) and resolves to { DURATION, frame(dst, t), silhouette(t) }: frame moves the layers
+// with the camera at their depth, animates reveals, light and water, and draws scene time t
+// into dst. The animation is laid out for 2.5 s; duration stretches all of it, the caption
+// included (a longer scene: the brush writes slower, the caption stays longer).
 (function (g) {
   g.SCENES = g.SCENES || {};
-  g.SCENES.place = async function (PLACE) {
+  g.SCENES.place = async function (PLACE, { duration = 2.5 } = {}) {
     const W = DH.wc;
     const { rgba, wash, dryStroke, taper, fillPoly, rng } = W;
     const out = W.canvas(1920, 1080).getContext('2d');
@@ -835,7 +837,11 @@
 
     // The silhouette of the place at time t in frame coords: y of its main ridge at each x
     // from -100 to 2020 (step 8), or null where the ridge does not reach.
+    // scene time -> the time of the animation, which is laid out for 2.5 s
+    const anim = (t) => (t * DURATION) / duration;
+
     function silhouette(t) {
+      t = anim(t);
       if (!RIDGE) return null;
       const cam = CAMS[PLACE](Math.min(Math.max(t, 0), DURATION)), z = 1 + (cam.zoom - 1) * RIDGE.p;
       const sc = RIDGE.pts.map(([x, y]) => [960 + z * (x - 960 - cam.x * RIDGE.p), 540 + z * (y - 540 - cam.y * RIDGE.p)]);
@@ -856,7 +862,7 @@
     if (CAPTIONS[PLACE]) CAP = DH.caption.make(CAPTIONS[PLACE]);
 
     function frame(dst, t) {
-      t = Math.min(Math.max(t, 0), DURATION - 1e-6);
+      t = Math.min(Math.max(anim(t), 0), DURATION - 1e-6);
       out.setTransform(1, 0, 0, 1, 0, 0);
       out.globalAlpha = 1;
       out.globalCompositeOperation = 'source-over';
@@ -867,6 +873,6 @@
       dst.setTransform(1, 0, 0, 1, 0, 0);
       dst.drawImage(out.canvas, 0, 0);
     }
-    return { DURATION, frame, silhouette };
+    return { DURATION: duration, frame, silhouette };
   };
 })(window);

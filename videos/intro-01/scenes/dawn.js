@@ -19,6 +19,9 @@
   g.SCENES = g.SCENES || {};
   g.SCENES.dawn = async function (opt = {}) {
     const { ease, lerp, progress } = DH;
+    // Video times: the return starts (start), the crane of the finale (crane), 道 (dao),
+    // "Dao to HSK" (title), the head turn (turn), the end. Defaults: the 20 s cut.
+    const TM = { start: 12.5, crane: 15.0, dao: 16.0, title: 17.2, turn: 17.5, end: 20, ...opt.times };
     const W = DH.wc, PAL = LAKE.PALETTES.dawn;
     const { bez, segment, ribbon, paintPetals } = DH.wind;
     const PAPER = '#f5f2ec';
@@ -37,16 +40,16 @@
     // In the finale it cranes up and forward over her shoulder (CAM2), then drifts a little
     // and almost stops by 18 s: the last frame must not swim.
     const CAM0 = { x: 260, y: -30, zoom: 0.98 }, CAM1 = { x: -20, y: 40, zoom: 1.05 }, CAM2 = { x: 10, y: -300, zoom: 1.08 };
-    function camera(tau) {
-      const k = ease.out(progress(tau, 0.5, 2.5)), c = ease.draw(progress(tau, 2.5, 3.7));
-      const d = ease.out(progress(tau, 3.7, 5.5));
+    function camera(T) {
+      const k = ease.out(progress(T, TM.start + 0.5, TM.crane)), c = ease.draw(progress(T, TM.crane, TM.crane + 1.2));
+      const d = ease.out(progress(T, TM.crane + 1.2, TM.crane + 3.0));
       return {
         x: lerp(lerp(CAM0.x, CAM1.x, k), CAM2.x, c) + 12 * d,
         y: lerp(lerp(CAM0.y, CAM1.y, k), CAM2.y, c) - 18 * d,
         zoom: lerp(lerp(CAM0.zoom, CAM1.zoom, k), CAM2.zoom, c) + 0.01 * d,
       };
     }
-    const CAM_END = camera(7.5);
+    const CAM_END = camera(TM.end);
     // the world point at depth p that the final camera shows at frame point (sx, sy)
     function worldAt(sx, sy, p) {
       const z = 1 + (CAM_END.zoom - 1) * p;
@@ -55,14 +58,14 @@
 
     // The sun: behind the ridge during the return, it clears it at 15-16.2 s and keeps
     // rising very slowly. How far below its painted place it is:
-    const sunY = (T) => T < 15 ? lerp(190, 150, progress(T, 12.5, 15))
-      : lerp(150, -40, ease.out(progress(T, 15, 16.2))) - 15 * progress(T, 16.2, 20);
+    const sunY = (T) => T < TM.crane ? lerp(190, 150, progress(T, TM.start, TM.crane))
+      : lerp(150, -40, ease.out(progress(T, TM.crane, TM.crane + 1.2))) - 15 * progress(T, TM.crane + 1.2, TM.end);
 
     // The wind calms towards the end of the hold.
-    const windK = (T) => lerp(1, 0.55, progress(T, 17, 20));
+    const windK = (T) => lerp(1, 0.55, progress(T, TM.dao + 1, TM.end));
 
     // The lights arrive at her hair about 14.3-14.7 s: a gust lifts hair and sash ends.
-    const gust = (T) => ease.out(progress(T, 14.2, 14.55)) * (1 - progress(T, 14.8, 16.0));
+    const gust = (T) => ease.out(progress(T, TM.start + 1.7, TM.start + 2.05)) * (1 - progress(T, TM.start + 2.3, TM.start + 3.5));
 
     function drawRita(ctx, cam, o) {
       const z = cam.zoom, scale = (z * RITA.h) / rig.H;
@@ -76,7 +79,7 @@
     // the sun climbs.
     const PATH = (() => { const r = W.rng(501), a = []; for (let i = 0; i < 70; i++) a.push([r(), r(), r(), r()]); return a; })();
     function sunPath(ctx, cam, T) {
-      const a = ease.out(progress(T, 15.3, 16.4));
+      const a = ease.out(progress(T, TM.crane + 0.3, TM.crane + 1.4));
       if (a <= 0) return;
       LAKE.view(ctx, cam, 0.8);
       const hz = LAKE.HORIZON, sx = L.sun.ox + L.sun.canvas.width / 2;
@@ -95,11 +98,11 @@
     const DAO = DH.caption.make({ hanzi: '道', pinyin: 'dào', size: 250 });
     const DAO_AT = worldAt(560, 450, 0.15), NAME_AT = worldAt(560, 655, 0.15);
     function finaleText(ctx, cam, T) {
-      if (T < 15.9) return;
+      if (T < TM.dao - 0.1) return;
       LAKE.view(ctx, cam, 0.15);
-      DH.caption.draw(ctx, DAO, T, { x: DAO_AT[0], y: DAO_AT[1], t0: 16.0 });
+      DH.caption.draw(ctx, DAO, T, { x: DAO_AT[0], y: DAO_AT[1], t0: TM.dao });
       // "Dao to HSK" settles like ink: out of a blur, a little from above
-      const k = ease.out(progress(T, 17.2, 17.75));
+      const k = ease.out(progress(T, TM.title, TM.title + 0.55));
       if (k > 0) {
         ctx.filter = k < 0.99 ? `blur(${(5 * (1 - k)).toFixed(2)}px)` : 'none';
         ctx.globalAlpha = k;
@@ -116,16 +119,16 @@
 
     function frame(out, tau) {
       tau = Math.max(0, tau);
-      const T = 12.5 + tau, cam = camera(tau);
+      const T = TM.start + tau, cam = camera(T);
       LAKE.draw(bctx, L, cam, T, sunY(T));
       sunPath(bctx, cam, T);
       out.setTransform(1, 0, 0, 1, 0, 0);
       out.drawImage(back, 0, 0);
       finaleText(out, cam, T);
-      const gk = gust(T), turn = ease.draw(progress(T, 17.5, 18.0));
+      const gk = gust(T), turn = ease.draw(progress(T, TM.turn, TM.turn + 0.5));
       drawRita(out, cam, { t: T, gust: gk, wind: windK(T) * (1 + 1.1 * gk), swap: { to: 'turn', k: turn } });
       // the pine is near the lens: as the camera cranes up it slides out of the frame
-      LAKE.place(out, pine.canvas, pine.ox, pine.oy + 700 * ease.draw(progress(T, 15.0, 16.0)), cam, 1.7);
+      LAKE.place(out, pine.canvas, pine.ox, pine.oy + 700 * ease.draw(progress(T, TM.crane, TM.crane + 1.0)), cam, 1.7);
       // dawn mist: thick while the turn passes, then it thins and the rock comes out
       const m = 0.8 * (1 - ease.out(progress(tau, 0.35, 1.5)));
       if (m > 0) {
@@ -145,10 +148,10 @@
     // ~1.0 s before its end), swing out through the turn, loop and end in the hair: at the
     // finale camera her hair is around (1300-1370, 520-600).
     const LIGHTS = [
-      { P: [[1180, 520], [760, 420], [260, 360], [420, 180], [900, 260], [1150, 420], [1318, 548]], t0: 12.2, dur: 2.35, w: 34, len: 0.3, wave: 10, seed: 41, color: '#a8643a' },
-      { P: [[1380, 430], [1000, 300], [520, 260], [360, 520], [760, 640], [1120, 560], [1340, 580]], t0: 12.28, dur: 2.3, w: 28, len: 0.28, wave: 12, seed: 42, color: '#b8834a' },
-      { P: [[760, 610], [420, 560], [150, 420], [380, 300], [820, 380], [1180, 470], [1306, 590]], t0: 12.34, dur: 2.32, w: 30, len: 0.3, wave: 9, seed: 43, color: '#7b1e2b' },
-      { P: [[1560, 610], [1200, 700], [700, 760], [520, 600], [880, 480], [1200, 500], [1352, 534]], t0: 12.4, dur: 2.28, w: 26, len: 0.27, wave: 11, seed: 44, color: '#c9a46a' },
+      { P: [[1180, 520], [760, 420], [260, 360], [420, 180], [900, 260], [1150, 420], [1318, 548]], t0: TM.start - 0.3, dur: 2.35, w: 34, len: 0.3, wave: 10, seed: 41, color: '#a8643a' },
+      { P: [[1380, 430], [1000, 300], [520, 260], [360, 520], [760, 640], [1120, 560], [1340, 580]], t0: TM.start - 0.22, dur: 2.3, w: 28, len: 0.28, wave: 12, seed: 42, color: '#b8834a' },
+      { P: [[760, 610], [420, 560], [150, 420], [380, 300], [820, 380], [1180, 470], [1306, 590]], t0: TM.start - 0.16, dur: 2.32, w: 30, len: 0.3, wave: 9, seed: 43, color: '#7b1e2b' },
+      { P: [[1560, 610], [1200, 700], [700, 760], [520, 600], [880, 480], [1200, 500], [1352, 534]], t0: TM.start - 0.1, dur: 2.28, w: 26, len: 0.27, wave: 11, seed: 44, color: '#c9a46a' },
     ];
     // the head eases in and out, so it settles into the hair; then the tail runs in after it
     const headOf = (s, T) => {
