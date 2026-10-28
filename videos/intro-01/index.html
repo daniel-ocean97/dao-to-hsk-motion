@@ -22,7 +22,7 @@
 <script src="scenes/prologue.js"></script>
 <script src="scenes/places.js"></script>
 <script>
-// intro-01, draft assembly (docs/intro-01-storyboard.md). So far 0-10 s:
+// intro-01, draft assembly (docs/intro-01-storyboard.md). So far 0-12.5 s:
 //   0.0-5.0  scenes 1-2, prologue and gust (scenes/prologue.js)
 //   4.6-5.4  a sheet of paper passes through the frame from right to left: its front edge
 //            covers the gust, its back edge uncovers the wall
@@ -30,11 +30,14 @@
 //   7.0-8.3  mist rises over the wall, its ridge stays as an ink silhouette that turns into
 //            the karst peaks of Guilin, the mist clears
 //   7.5-10.0 scene 4, Guilin
+//   9.6-10.9 night falls over Guilin, the peaks stretch up in ink and turn into the Pudong
+//            skyline, the night ebbs into the lit city
+//   10.0-12.5 scene 5, Shanghai
 // Each scene draws into its own buffer; renderAt(t) picks the scenes for time t and
 // composes them. Painting all the layers takes a few minutes before the first frame.
 const { ease, lerp, progress } = DH;
 const W = DH.wc;
-const DURATION = 10, PAPER = '#f5f2ec';
+const DURATION = 12.5, PAPER = '#f5f2ec';
 const out = document.getElementById('out').getContext('2d');
 const buf = W.canvas(1920, 1080).getContext('2d');
 
@@ -115,12 +118,68 @@ function ridgeMorph(ctx, t) {
   ctx.filter = 'none';
 }
 
+// ---------- the peaks grow into towers ----------
+
+// Night falls over Guilin: the sky above the line of the peaks floods with the night sky of
+// Shanghai, the peaks below it turn to dark ink and stretch up; the line then becomes the
+// Pudong skyline; under the full flood the scenes swap, then the flood ebbs and the line is
+// the city. NIGHT: the Shanghai sky (scenes/places.js), INKB: the body of the silhouette.
+const NIGHT = ['#3b4560', '#8c8597'], INKB = '#262b3a';
+const nightK = (t) => ease.draw(progress(t, 9.6, 10.1)) * (1 - ease.draw(progress(t, 10.4, 10.95)));
+
+function peaksToTowers(ctx, t) {
+  const a = nightK(t);
+  if (a <= 0) return;
+  const A = guilin.silhouette(t - 7.5), B = shanghai.silhouette(t - 10);
+  const stretch = 1 + 0.6 * ease.draw(progress(t, 9.65, 10.05)); // the peaks grow up
+  const m = ease.draw(progress(t, 10.0, 10.45));
+  const HZ = lerp(690, 760, m); // the water line moves from the Li river to the Huangpu
+  const pts = [];
+  for (let i = 0, x = -100; i < A.length; i++, x += 8) {
+    const ya = A[i] == null ? HZ : HZ - (HZ - A[i]) * stretch, yb = B[i] ?? HZ;
+    pts.push([x, Math.min(HZ, lerp(ya, yb, m))]);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = a;
+  // the sky above the line
+  const g = ctx.createLinearGradient(0, 0, 0, HZ);
+  g.addColorStop(0, NIGHT[0]); g.addColorStop(1, NIGHT[1]);
+  ctx.fillStyle = g;
+  W.fillPoly(ctx, [[-100, -100], [2020, -100], ...pts.slice().reverse()]);
+  // the ink of the silhouette, down to the water; a soft bleed along the crest
+  // a wash: dark ink at the crests, thinner and bluer towards the water
+  const top = Math.min(...pts.map((p) => p[1]));
+  const body = ctx.createLinearGradient(0, top, 0, HZ);
+  body.addColorStop(0, INKB); body.addColorStop(1, '#3f4660');
+  ctx.fillStyle = body;
+  ctx.filter = 'blur(1.5px)';
+  W.fillPoly(ctx, [...pts, [2020, HZ + 6], [-100, HZ + 6]]);
+  ctx.filter = 'blur(10px)';
+  ctx.strokeStyle = W.rgba(INKB, 0.5);
+  ctx.lineWidth = 14;
+  ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+  ctx.filter = 'none';
+  // the river below stays, darkening with the night
+  ctx.fillStyle = W.rgba('#434a60', 0.85 * lerp(0.7, 1, m));
+  ctx.fillRect(-100, HZ + 4, 2120, 1180 - HZ);
+  ctx.restore();
+}
+
 // ---------- timeline ----------
 
-let prologue, wall, guilin;
+let prologue, wall, guilin, shanghai;
 function renderAt(t) {
   t = Math.min(Math.max(t, 0), DURATION - 1e-6);
   out.setTransform(1, 0, 0, 1, 0, 0);
+  if (t >= 9.6) {
+    // under the full night flood (10.25 s) Guilin gives way to Shanghai
+    if (t < 10.25) guilin.frame(out, t - 7.5);
+    else shanghai.frame(out, t - 10);
+    peaksToTowers(out, t);
+    out.setTransform(1, 0, 0, 1, 0, 0);
+    return;
+  }
   if (t >= 7.0) {
     // under the thickest mist (7.65 s) the wall gives way to Guilin
     if (t < 7.65) wall.frame(out, t - 5);
@@ -164,7 +223,7 @@ function renderAt(t) {
 }
 
 (async () => {
-  [prologue, wall, guilin] = await Promise.all([SCENES.prologue({ wipe: false }), SCENES.place('wall'), SCENES.place('guilin')]);
+  [prologue, wall, guilin, shanghai] = await Promise.all([SCENES.prologue({ wipe: false }), SCENES.place('wall'), SCENES.place('guilin'), SCENES.place('shanghai')]);
   document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
   window.DURATION = DURATION;
   window.renderAt = renderAt;

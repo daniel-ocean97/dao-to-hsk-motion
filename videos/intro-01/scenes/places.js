@@ -757,6 +757,19 @@
       }
       begin('mistW', 0.8);
       mist(HZ, 70, '#9a93a6', 115, 0.4);
+      RIDGE = skylineOf('city'); // the Pudong skyline: the silhouette for the cut
+    }
+
+    // The top edge of what is painted on a layer: for every 8th column, the first row with
+    // solid paint (world coords). Columns with nothing painted go to the bottom.
+    function skylineOf(name) {
+      const L = LAYERS[name], c = L.c, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data, pts = [];
+      for (let col = 0; col < c.width; col += 8) {
+        let row = 0;
+        while (row < c.height && d[(row * c.width + col) * 4 + 3] < 110) row++;
+        pts.push([LX + col, LY + row]);
+      }
+      return { pts, p: L.p };
     }
 
     // The camera moves towards Pudong with a slow rise; windows light up bucket by bucket and
