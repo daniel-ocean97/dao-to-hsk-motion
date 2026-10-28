@@ -12,6 +12,10 @@ Examples:
     uv run render/render.py videos/probe-rita/index.html --stills 1.0 4.5
     uv run render/render.py videos/probe-rita/index.html --audio music/track.wav
     uv run render/render.py videos/probe-places/index.html --query place=wall --name place-wall
+    uv run render/render.py videos/intro-01/index.html --reuse-frames \
+        --audio music/local/track.mp3 --audio-start 7.5 --audio-fade 1.5
+
+--reuse-frames builds the MP4 from the frames of the last render (fast: for trying music).
 """
 
 import argparse
@@ -97,15 +101,22 @@ def render_frames(html: Path, frames_dir: Path, fps: int, times: list[float] | N
     return written
 
 
-def assemble(frames_dir: Path, fps: int, out_mp4: Path, audio: Path | None) -> None:
+def assemble(frames_dir: Path, fps: int, out_mp4: Path, audio: Path | None,
+             audio_start: float = 0.0, audio_fade: float = 0.0) -> None:
+    """Frames -> H.264. With audio: the track from audio_start, faded out over the last
+    audio_fade seconds of the video, cut at the video's end."""
+    count = len(list(frames_dir.glob("[0-9]*.png")))
+    duration = count / fps
     cmd = [find_tool("ffmpeg"), "-y", "-loglevel", "error", "-framerate", str(fps),
            "-i", str(frames_dir / "%05d.png")]
     if audio:
-        cmd += ["-i", str(audio)]
+        cmd += ["-ss", f"{audio_start:.3f}", "-i", str(audio)]
     cmd += ["-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p",
             "-r", str(fps), "-movflags", "+faststart"]
     if audio:
-        cmd += ["-c:a", "aac", "-b:a", "192k", "-shortest"]
+        if audio_fade > 0:
+            cmd += ["-af", f"afade=t=out:st={duration - audio_fade:.3f}:d={audio_fade:.3f}"]
+        cmd += ["-c:a", "aac", "-b:a", "192k", "-t", f"{duration:.3f}"]
     cmd.append(str(out_mp4))
     subprocess.run(cmd, check=True)
 
@@ -117,6 +128,9 @@ def main() -> None:
     ap.add_argument("--name", help="output name (default: scene folder name)")
     ap.add_argument("--stills", type=float, nargs="+", help="render only these times as PNG")
     ap.add_argument("--audio", type=Path, help="audio file to mux as AAC")
+    ap.add_argument("--audio-start", type=float, default=0.0, help="start the track at this second")
+    ap.add_argument("--audio-fade", type=float, default=0.0, help="fade the track out over the last N seconds")
+    ap.add_argument("--reuse-frames", action="store_true", help="skip rendering, use the frames of the last render")
     ap.add_argument("--query", default="", help="extra URL parameters for the scene, e.g. place=wall")
     args = ap.parse_args()
 
@@ -128,11 +142,15 @@ def main() -> None:
         return
 
     frames_dir = out_dir / "frames"
-    if frames_dir.exists():
-        shutil.rmtree(frames_dir)
-    render_frames(args.html, frames_dir, args.fps, None, args.query)
+    if args.reuse_frames:
+        if not frames_dir.exists():
+            sys.exit(f"{frames_dir} has no frames: render once without --reuse-frames")
+    else:
+        if frames_dir.exists():
+            shutil.rmtree(frames_dir)
+        render_frames(args.html, frames_dir, args.fps, None, args.query)
     out_mp4 = out_dir / f"{name}.mp4"
-    assemble(frames_dir, args.fps, out_mp4, args.audio)
+    assemble(frames_dir, args.fps, out_mp4, args.audio, args.audio_start, args.audio_fade)
     print(f"video -> {out_mp4}" + ("" if args.audio else "  (no audio track)"))
 
 

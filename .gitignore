@@ -23,3 +23,6 @@ Thumbs.db
 # Claude Code personal settings
 .claude/settings.local.json
 .claude/launch.json
+
+# Music the licence does not let us redistribute as a file (music/CREDITS.md)
+music/local/
