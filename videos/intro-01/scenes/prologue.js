@@ -15,6 +15,7 @@
   g.SCENES.prologue = async function (opt = {}) {
     const { ease, lerp, progress } = DH;
     const W = DH.wc;
+    const { bez, segment, ribbon, pace, strokeHead, paintPetals } = DH.wind;
     // Gust times below are in "gust time" t = T - 2.5 (T: scene time, 0..5), as in the probe:
     // the gust hits at t = G = 0.5, i.e. T = 3.0, the video's 3.0.
     const DURATION = 2.5, G = 0.5;
@@ -59,6 +60,17 @@
       fade.addColorStop(0, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
       wx.fillStyle = fade; wx.fillRect(0, 0, w, 70);
       L.water = { c: wc, ox, oy: HORIZON, p: 0.8 };
+      // reflection of the mountains, flipped at the horizon, soft (as in probe-landscape)
+      const rc = W.canvas(w, 360), rx = rc.getContext('2d');
+      rx.filter = 'blur(5px)';
+      rx.globalAlpha = 0.22;
+      for (const k of ['far', 'mid']) {
+        // a row at world y lands at (HORIZON - y) * 0.75 below the horizon
+        const l = L[k];
+        rx.setTransform(1, 0, 0, -0.75, l.ox - ox, 0.75 * (HORIZON - l.oy));
+        rx.drawImage(l.c, 0, 0);
+      }
+      L.reflect = { c: rc, ox, oy: HORIZON, p: 0.8 };
       L.mistFar = { c: W.mistBand({ w: w + 800, h: 120, color: PAL.mist, seed: 13 }), ox: ox - 400, oy: 600, p: 0.35, speed: 9 };
       L.mistLow = { c: W.mistBand({ w: w + 800, h: 130, color: PAL.mist, seed: 17 }), ox: ox - 400, oy: 640, p: 0.8, speed: -14 };
       L.rock = W.rock({ x: 1250, y: 1012, w: 520, seed: 3 });
@@ -80,11 +92,23 @@
 
     function drawPlace(L, cam, t) {
       const ctx = bctx;
+      // start from the low sky colour, as probe-landscape: the sky does not reach the bottom
+      // of the frame, and where the water and the rock are thin the last frame showed through
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = PAL.skyLow;
+      ctx.fillRect(0, 0, 1920, 1080);
       place(ctx, L.sky.c, L.sky.ox, L.sky.oy, cam, L.sky.p);
       place(ctx, L.far.c, L.far.ox, L.far.oy, cam, L.far.p);
       { const m = L.mistFar; place(ctx, m.c, m.ox + ((t * m.speed) % 400), m.oy, cam, m.p); }
       place(ctx, L.mid.c, L.mid.ox, L.mid.oy, cam, L.mid.p);
       place(ctx, L.water.c, L.water.ox, L.water.oy, cam, L.water.p);
+      // reflection ripples: thin slices drawn with a small sideways wave
+      const R = L.reflect, z = 1 + (cam.zoom - 1) * R.p;
+      for (let y = 0; y < R.c.height; y += 4) {
+        const dx = Math.sin(y * 0.11 + t * 2.2) * (1 + y * 0.02) + Math.sin(y * 0.031 - t * 1.3) * 2;
+        ctx.setTransform(z, 0, 0, z, 960 + z * (R.ox + dx - 960 - cam.x * R.p), 540 + z * (R.oy + y - 540 - cam.y * R.p));
+        ctx.drawImage(R.c, 0, y, R.c.width, 4, 0, 0, R.c.width, 4);
+      }
       { const m = L.mistLow; place(ctx, m.c, m.ox + ((t * m.speed) % 400 + 400) % 400 - 400, m.oy, cam, m.p); }
       place(ctx, L.rock.canvas, L.rock.ox, L.rock.oy, cam, 1);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -113,14 +137,6 @@
     // the gust bends the hair along its root->tip direction by up to ~0.05 of the image height
     const HAIR_DIR = (() => { const dx = 680 - 990, dy = 400 - 80, l = Math.hypot(dx, dy); return [dx / l, dy / l]; })();
 
-    // Smooth curve through the waypoints P (Catmull-Rom), u in 0..1 over all of them.
-    function bez(P, u) {
-      const n = P.length - 1, f = Math.min(n - 1e-9, Math.max(0, u * n)), i = Math.floor(f), k = f - i;
-      const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(n, i + 2)];
-      const c = (a, b, c2, d) => 0.5 * (2 * b + (-a + c2) * k + (2 * a - 5 * b + 4 * c2 - d) * k * k + (-a + 3 * b - 3 * c2 + d) * k * k * k);
-      return [c(p0[0], p1[0], p2[0], p3[0]), c(p0[1], p1[1], p2[1], p3[1])];
-    }
-
     // Each stroke: a curve through waypoints in world coords at depth p, the time it enters (t0) and how long it
     // takes to fly the curve (dur), its width, the share of the curve it covers (len), how much
     // it ripples across its path (wave). catch: image point of the hair tip it pulls a strand
@@ -144,66 +160,7 @@
       { P: [[2300, 800], [1400, 700], [600, 700], [-400, 300]], screen: true, t0: 1.95, dur: 0.6, w: 300, len: 0.45, wave: 30, seed: 22, blur: 12, alpha: 0.5 },
     ];
 
-    // Points of the curve between u0 and u1, rippled across the path by a wave that travels
-    // along the stroke (the wind shakes it like a ribbon). q: 0 at the tail, 1 at the head.
-    function segment(s, u0, u1, t, n = 40) {
-      const pts = [];
-      for (let i = 0; i <= n; i++) {
-        const q = i / n, u = lerp(u0, u1, q);
-        const a = bez(s.P, Math.max(0, u - 0.004)), b = bez(s.P, Math.min(1, u + 0.004)), c = bez(s.P, u);
-        let nx = -(b[1] - a[1]), ny = b[0] - a[0];
-        const l = Math.hypot(nx, ny) || 1;
-        const off = s.wave * Math.sin(u * 14 - t * 9 + s.seed) * (0.3 + 0.7 * (1 - q));
-        pts.push([c[0] + (nx / l) * off, c[1] + (ny / l) * off]);
-      }
-      return pts;
-    }
-
-    // A dry-brush ribbon (飞白): a pale wash under many brush hairs that break up towards the
-    // tail; the ribbon turns edge-on now and then as it twists in the wind.
-    function ribbon(ctx, pts, s, a, t) {
-      const n = pts.length - 1;
-      const width = (q) => s.w * Math.pow(Math.sin(Math.PI * Math.min(1, q * 0.95 + 0.03)), 0.5) * (0.35 + 0.65 * q) *
-        (0.45 + 0.55 * Math.abs(Math.cos(q * 3.2 + t * 4 + s.seed)));
-      ctx.fillStyle = W.rgba(INK, a * 0.16);
-      W.fillPoly(ctx, W.taper(pts, width));
-      // normals along the ribbon
-      const N = pts.map((p, i) => {
-        const p0 = pts[Math.max(0, i - 1)], p1 = pts[Math.min(n, i + 1)];
-        const dx = p1[0] - p0[0], dy = p1[1] - p0[1], l = Math.hypot(dx, dy) || 1;
-        return [-dy / l, dx / l];
-      });
-      const r = W.rng(s.seed);
-      ctx.lineCap = 'round';
-      for (let h = 0; h < 14; h++) {
-        const o = r() - 0.5, lw = 0.6 + r() * 2.6 * (s.w / 50), ha = a * (0.25 + 0.6 * r()), seedH = r() * 50;
-        ctx.strokeStyle = W.rgba(INK, ha);
-        ctx.lineWidth = lw;
-        ctx.beginPath();
-        let on = false;
-        for (let i = 0; i <= n; i++) {
-          const q = i / n;
-          // dry towards the tail: the hair skips more often there
-          const ink = DH.noise(q * 9 + seedH, s.seed + h) * 0.5 + 0.5 > 0.62 - 0.55 * q;
-          const x = pts[i][0] + N[i][0] * o * width(q), y = pts[i][1] + N[i][1] * o * width(q);
-          if (ink && on) ctx.lineTo(x, y);
-          else if (ink) { ctx.moveTo(x, y); on = true; } else on = false;
-        }
-        ctx.stroke();
-      }
-      // the wet head: a darker blot where the brush still holds ink
-      ctx.fillStyle = W.rgba(INK, a * 0.45);
-      W.fillPoly(ctx, W.taper(pts.slice(Math.floor(n * 0.82)), (q) => width(0.82 + 0.18 * q) * 0.8 * Math.sin(Math.PI * Math.min(1, q * 0.9 + 0.1))));
-    }
-
     // One stroke at time t: its head flies along the curve, the body is the stretch behind it.
-    // The head rushes in and then flies on more slowly, but never stops: the body stays on the
-    // curve to the end and the strokes keep leading the camera.
-    const pace = (k) => 0.65 * ease.out(k) + 0.35 * k;
-    function strokeHead(s, t) {
-      const k = progress(t, s.t0, s.t0 + s.dur);
-      return [k, pace(k) * (s.screen ? 1 + s.len : 1)];
-    }
     function drawStroke(ctx, s, t) {
       const [k, head] = strokeHead(s, t);
       if (k <= 0) return;
@@ -291,37 +248,6 @@
     // strokes, some way behind its head and off to one side, so the petals spread out along the
     // wind's paths instead of bunching; it tumbles and turns edge-on.
     const PETAL_DELAY = 0.1; // after the tear, the strand starts turning into petals
-    const WINE = ['#7b1e2b', '#5e1520', '#8c2f3c', '#9a4150'];
-
-    // Watercolour petal sprites: a rounded petal with a small notch at the tip, a wash with a
-    // ragged edge, the dried darker rim, paler at the base.
-    function paintPetals(n = 8) {
-      const out = [], r = W.rng(301);
-      for (let i = 0; i < n; i++) {
-        const c = W.canvas(72, 72), x = c.getContext('2d');
-        x.translate(36, 36);
-        const len = 24 + r() * 6, wid = 14 + r() * 6, poly = [];
-        for (let k = 0; k < 24; k++) {
-          const a = (k / 24) * Math.PI * 2, sa = Math.sin(a), ca = Math.cos(a);
-          // narrow at the base (bottom), round at the top, a notch at the very top
-          const narrow = 0.45 + 0.55 * (1 - ca) / 2, notch = 1 - 0.18 * Math.exp(-((a - Math.PI) ** 2) * 18);
-          poly.push([sa * wid * narrow, ca * len * 0.5 * notch + len * 0.05, 0.06]);
-        }
-        const col = WINE[Math.floor(r() * WINE.length)];
-        const base = W.wash(x, poly, col, { layers: 14, alpha: 0.11 + r() * 0.05, rough: 0.06, seed: 310 + i });
-        x.strokeStyle = W.rgba(WINE[1], 0.35);
-        x.lineWidth = 1.1;
-        x.beginPath(); base.forEach(([px, py], k) => (k ? x.lineTo(px, py) : x.moveTo(px, py))); x.closePath(); x.stroke();
-        // paler towards the base: lift some paint
-        x.globalCompositeOperation = 'destination-out';
-        const g = x.createRadialGradient(0, len * 0.42, 0, 0, len * 0.42, len * 0.55);
-        g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-        x.fillStyle = g; x.fillRect(-36, -36, 72, 72);
-        out.push(c);
-      }
-      return out;
-    }
-
     // Where and when each petal opens. From a strand: 4 petals along it, from the far end
     // to the root; from the hair tips: 3 petals at the gust.
     const RIDERS = STROKES.filter((s) => !s.screen);
