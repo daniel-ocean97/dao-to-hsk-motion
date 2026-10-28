@@ -4,8 +4,8 @@
 //   wall      the brush writes the Great Wall along the ridges, the camera flies along; 长城
 //   guilin    karst peaks come out of the mist, a boat glides, ripples spread; 桂林 over the
 //             water, mirrored in it
-//   shanghai  the camera moves to Pudong, windows light up, the sky pales to dawn; 上海 in
-//             light ink in the night sky
+//   shanghai  the camera moves to Pudong, windows light up, the lamps of the embankment come
+//             on in a wave, the sky pales to dawn; 上海 in light ink in the night sky
 // SCENES.place(PLACE, { duration }) paints the place once into layers (painting takes a
 // while) and resolves to { DURATION, frame(dst, t), silhouette(t) }: frame moves the layers
 // with the camera at their depth, animates reveals, light and water, and draws scene time t
@@ -721,10 +721,11 @@
           x2.drawImage(b.c, 0, 0);
           LAYERS[name + i] = { c: c2, p: 0.45 };
         }
-        // reflection in the river: flipped and squashed at the horizon, very soft
+        // reflection in the river: flipped and squashed, the foot of the city at the
+        // waterline under the embankment, very soft
         const c3 = W.canvas(LW, LH), x3 = c3.getContext('2d');
         x3.filter = 'blur(22px)';
-        x3.setTransform(1, 0, 0, -0.7, 0, (HZ - LY) * 1.7);
+        x3.setTransform(1, 0, 0, -0.7, 0, (WL - LY) + 0.7 * (HZ - LY));
         x3.drawImage(b.c, 0, 0);
         LAYERS['refl' + i] = { c: c3, p: 0.8 };
       });
@@ -737,29 +738,167 @@
       ctx.fillStyle = haze;
       ctx.fillRect(LX, HZ - 360, LW, 380);
 
-      // the Huangpu: dark water glazes, broken reflections of the lights, light streaks
+      // the Huangpu: dark water glazes, broken reflections of the lights, light streaks.
+      // It starts under the embankment (paintShore) and its top edge stays hidden behind it.
       begin('water', 0.8);
-      const wpoly = [[-300, HZ, 0.01], [2220, HZ, 0.01], [2220, 1220, 0.03], [-300, 1220, 0.03]];
+      const wpoly = densify([[-300, WL - 22], [2220, WL - 22], [2220, 1220], [-300, 1220]], 40).map(([x, y]) => [x, y, y < 1000 ? 0.01 : 0.03]);
       ctx.fillStyle = '#434a60';
       fillPoly(ctx, wpoly);
       wash(ctx, wpoly, '#2f3650', { layers: 14, alpha: 0.08, seed: 160 });
       const r3 = rng(150);
       for (let i = 0; i < 60; i++) {
-        const y = HZ + 10 + Math.pow(r3(), 1.4) * 320, x = -240 + r3() * 2400, len = 60 + r3() * 260;
+        const y = WL + 8 + Math.pow(r3(), 1.4) * 280, x = -240 + r3() * 2400, len = 60 + r3() * 260;
         dryStroke(ctx, [[x, y], [x + len / 2, y + 1], [x + len, y]], 2 + r3() * 2, '#9aa0b4', { alpha: 0.22, hairs: 2, dry: 0.5, seed: 170 + i });
       }
       begin('dabs', 0.8);
       for (const [cx, spread] of [[640, 70], [1090, 40], [1240, 50], [1420, 50], [900, 260], [1700, 160], [300, 200]]) {
         for (let i = 0; i < 46; i++) {
-          const y = HZ + 8 + Math.pow(r3(), 1.3) * 230, x = cx + r3.gauss() * spread * (0.4 + (y - HZ) / 300);
+          const y = WL + 6 + Math.pow(r3(), 1.3) * 200, x = cx + r3.gauss() * spread * (0.4 + (y - WL) / 260);
           const len = 6 + r3() * 26;
-          ctx.fillStyle = rgba(r3() < 0.7 ? '#efc485' : '#f3d8cf', 0.12 + 0.3 * r3() * (1 - (y - HZ) / 300));
+          ctx.fillStyle = rgba(r3() < 0.7 ? '#efc485' : '#f3d8cf', 0.12 + 0.3 * r3() * (1 - (y - WL) / 260));
           ctx.beginPath(); ctx.ellipse(x, y, len, 1.4, 0, 0, Math.PI * 2); ctx.fill();
         }
       }
+      paintShore(HZ);
       begin('mistW', 0.8);
-      mist(HZ, 70, '#9a93a6', 115, 0.4);
+      mist(WL + 6, 60, '#9a93a6', 115, 0.32);
       RIDGE = skylineOf('city'); // the Pudong skyline: the silhouette for the cut
+    }
+
+    // The Pudong embankment, so the towers stand on land, not on the water: low buildings
+    // and the trees of the riverside park at their feet, a promenade with street lamps, a
+    // stone wall down to the water. Layer depth 0.5, just in front of the city (0.45); it
+    // is drawn over the top edge of the water (0.8), which the camera moves a little more.
+    // The lamps are layers of their own: they light up in a wave along the river.
+    const WL = 812, PROM = 792; // the waterline at the foot of the wall; the promenade
+    const LAMP_X = [];
+    function paintShore(HZ) {
+      begin('shore', 0.5);
+      const sh = W.canvas(LW, LH), c = sh.getContext('2d'), r = rng(700);
+      c.translate(-LX, -LY);
+      // street-level light behind the trees: a warm haze over the feet of the towers
+      const warm = c.createLinearGradient(0, HZ - 60, 0, PROM);
+      warm.addColorStop(0, 'rgba(214,160,118,0)');
+      warm.addColorStop(1, 'rgba(214,160,118,0.35)');
+      c.fillStyle = warm;
+      c.fillRect(LX, HZ - 60, LW, PROM - HZ + 60);
+      // low buildings: blocks of shops and offices, a few lit windows; none at the Pearl,
+      // which stands in its park with only trees around its legs
+      const low = [];
+      for (let x = -260; x < 2180;) {
+        const w = 50 + r() * 100, h = 36 + r() * 58;
+        if (x + w > 540 && x < 740) { x = 740 + r() * 20; continue; }
+        low.push([x, w, h]);
+        x += w + (r() < 0.3 ? 10 + r() * 30 : -6);
+      }
+      low.forEach(([x, w, h], i) => {
+        const poly = [[x, PROM + 2], [x, PROM - h], [x + w, PROM - h], [x + w, PROM + 2]];
+        building(c, poly, { color: '#57586a', shade: '#3b3c4f', under: '#454657', edge: 0.02, seed: 720 + i * 3, ink: false });
+        for (let y = PROM - h + 7; y < PROM - 14; y += 8) {
+          for (let wx = x + 5; wx < x + w - 4; wx += 7) {
+            if (r() > 0.28) continue;
+            c.fillStyle = rgba(r() < 0.8 ? '#f2c886' : '#f6ddd2', 0.4 + 0.45 * r());
+            c.beginPath(); c.ellipse(wx, y, 1.8, 1.3, 0, 0, Math.PI * 2); c.fill();
+          }
+        }
+        // lit shopfronts along the street
+        c.fillStyle = rgba('#e9b98a', 0.3 + 0.25 * r());
+        c.fillRect(x + 3, PROM - 12, w - 6, 6);
+        dryStroke(c, [[x - 2, PROM - h], [x + w / 2, PROM - h - 0.5], [x + w + 2, PROM - h]], 1.4, '#1d2130', { alpha: 0.5, hairs: 1, dry: 0.45, seed: 760 + i });
+      });
+      // the riverside park: a low hedge all along, trees in groups with gaps between them
+      // (the low buildings show through), round crowns of two or three blobs and a few taller
+      // poplar-like ones. Edges split short: a long edge would spill a wide ragged wash.
+      const hedge = [];
+      for (let x = -300; x <= 2220; x += 22) hedge.push([x, PROM - 10 - r() * 9, 0.12]);
+      const hedgePoly = [...hedge];
+      for (let x = 2220; x >= -300; x -= 30) hedgePoly.push([x, PROM + 4, 0.01]);
+      c.fillStyle = '#2d3535';
+      fillPoly(c, hedgePoly);
+      wash(c, hedgePoly, '#46524c', { layers: 8, alpha: 0.1, seed: 701 });
+      const crown = (cx, cy, rx, ry, sd) => {
+        const poly = Array.from({ length: 12 }, (_, k) => [cx + Math.cos(k / 12 * 6.283) * rx, cy + Math.sin(k / 12 * 6.283) * ry, 0.22]);
+        c.fillStyle = rgba('#2a3231', 0.85);
+        fillPoly(c, poly);
+        wash(c, poly, r() < 0.5 ? '#465049' : '#525a4d', { layers: 8, alpha: 0.11, seed: sd });
+      };
+      for (let x = -280; x < 2200;) {
+        const n = 2 + Math.floor(r() * 4);
+        for (let k = 0; k < n; k++, x += 18 + r() * 14) {
+          const sd = 800 + Math.round(x);
+          dryStroke(c, [[x, PROM], [x + r.gauss(), PROM - 20]], 2, '#1d2130', { alpha: 0.6, hairs: 1, dry: 0.2, seed: sd });
+          if (r() < 0.2) {
+            crown(x, PROM - 42, 7 + r() * 3, 22 + r() * 8, sd);
+          } else {
+            const rad = 11 + r() * 10, cy = PROM - 20 - rad * 0.8;
+            for (let b = 0; b < 3; b++) crown(x + (b - 1) * rad * 0.55, cy - (b === 1 ? rad * 0.35 : 0), rad * 0.75, rad * 0.65, sd + b);
+            // lamplight from below on the underside of the crown
+            c.fillStyle = 'rgba(214,170,120,0.1)';
+            c.beginPath(); c.ellipse(x, cy + rad * 0.45, rad * 0.8, rad * 0.3, 0, 0, Math.PI * 2); c.fill();
+          }
+        }
+        x += 40 + r() * 90;
+      }
+      W.granulate(c, LW, LH, 0.12);
+      // the promenade: pale pavement under the lamps, the railing, the wall into the water
+      const wall = densify([[-300, PROM - 1], [2220, PROM - 1], [2220, WL], [-300, WL]], 30).map(([x, y]) => [x, y, 0.01]);
+      c.fillStyle = '#383d50';
+      fillPoly(c, wall);
+      wash(c, wall, '#2c3145', { layers: 10, alpha: 0.1, seed: 702, rough: 0.01 });
+      c.fillStyle = rgba('#a59cab', 0.5);
+      c.fillRect(LX, PROM - 2, LW, 3);
+      for (let i = 0; i < 3; i++) {
+        const y = PROM + 6 + i * 5;
+        dryStroke(c, [[-240, y], [960, y + 0.6], [2160, y]], 1.1, '#1d2130', { alpha: 0.35, hairs: 1, dry: 0.6, seed: 710 + i });
+      }
+      dryStroke(c, [[-240, PROM - 7], [960, PROM - 7.5], [2160, PROM - 7]], 1.4, '#1d2130', { alpha: 0.6, hairs: 1, dry: 0.3, seed: 714 });
+      c.fillStyle = rgba('#1d2130', 0.45);
+      for (let x = -236; x < 2160; x += 14) c.fillRect(x, PROM - 7, 1.2, 6);
+      // lamp posts: thin ink, the lamps themselves come later
+      for (let x = -230; x < 2160; x += 34 + r() * 8) {
+        LAMP_X.push(x);
+        dryStroke(c, [[x, PROM], [x, PROM - 22]], 1.6, '#1d2130', { alpha: 0.7, hairs: 1, dry: 0.15, seed: 900 + LAMP_X.length });
+      }
+      ctx.drawImage(sh, LX, LY);
+
+      // the lamps: a warm dot on each post, the glow around it, a broken column of light on
+      // the water under it (the reflection reaches down from the foot of the wall)
+      const lamps = begin('lamps', 0.5).c.getContext('2d');
+      const lampG = begin('lampGlow', 0.5).c.getContext('2d');
+      const lampR = begin('lampRefl', 0.5).c.getContext('2d');
+      for (const g of [lamps, lampG, lampR]) g.setTransform(1, 0, 0, 1, -LX, -LY);
+      const r2 = rng(901);
+      lampG.filter = 'blur(9px)';
+      for (const x of LAMP_X) {
+        lamps.fillStyle = rgba('#f6ddb0', 0.95);
+        lamps.beginPath(); lamps.arc(x, PROM - 23, 2.6, 0, Math.PI * 2); lamps.fill();
+        lampG.fillStyle = rgba('#f0b070', 0.75);
+        lampG.beginPath(); lampG.arc(x, PROM - 22, 9, 0, Math.PI * 2); lampG.fill();
+        lampG.fillStyle = rgba('#f0b070', 0.35);
+        lampG.beginPath(); lampG.ellipse(x, PROM - 2, 16, 4, 0, 0, Math.PI * 2); lampG.fill();
+        for (let y = WL + 3; y < WL + 70; y += 3 + r2() * 4) {
+          const fade = 1 - (y - WL) / 70, w = (2 + r2() * 7) * (0.6 + fade * 0.6);
+          lampR.fillStyle = rgba(r2() < 0.8 ? '#efc485' : '#f3d8cf', (0.3 + 0.5 * r2()) * fade);
+          lampR.beginPath(); lampR.ellipse(x + r2.gauss() * 2.5, y, w, 1.2, 0, 0, Math.PI * 2); lampR.fill();
+        }
+      }
+      lampG.filter = 'none';
+    }
+
+    // Where the wave of lamps has reached at time t (world x), and the mask behind it.
+    const lampFront = (t) => DH.lerp(-320, 2240, smooth(DH.progress(t, 0.45, 1.3)));
+    // a soft front, so a lamp half way does not cut its own glow in half
+    const behind = (x) => (m) => {
+      const g = m.createLinearGradient(x - 50, 0, x, 0);
+      g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      m.fillStyle = g; m.fillRect(LX, LY, LW, LH);
+    };
+    function flash(x) {
+      return (m) => {
+        const g = m.createLinearGradient(x - 160, 0, x, 0);
+        g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.75, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        m.fillStyle = g; m.fillRect(x - 160, LY, 160, LH);
+      };
     }
 
     // The top edge of what is painted on a layer: for every 8th column, the first row with
@@ -775,7 +914,8 @@
     }
 
     // The camera moves towards Pudong with a slow rise; windows light up bucket by bucket and
-    // the glow grows with them; near the end the sky pales towards dawn and the lights soften.
+    // the glow grows with them, the street lamps of the embankment come on in a wave; near
+    // the end the sky pales towards dawn and the lights soften.
     function frameShanghai(t) {
       const cam = CAMS.shanghai(t);
       const dawn = smooth(DH.progress(t, 1.6, 2.5));
@@ -798,6 +938,16 @@
       out.globalCompositeOperation = 'screen';
       for (let i = 0; i < NB; i++) show('refl' + i, cam, 0.45 * (i === 0 ? Math.max(0.6, on(0)) : on(i)));
       out.globalCompositeOperation = 'source-over';
+      // the embankment over the top of the water; its lamps light up in a wave along the
+      // river, each one flaring a little as it comes on
+      show('shore', cam);
+      const front = lampFront(t), soft = 1 - 0.4 * dawn, p = LAYERS.shore.p;
+      out.globalCompositeOperation = 'screen';
+      place(masked('lampGlow', behind(front)), LX, LY, cam, p, soft);
+      place(masked('lampGlow', flash(front)), LX, LY, cam, p, 0.8 * soft);
+      place(masked('lampRefl', behind(front)), LX, LY, cam, p, 0.8 * soft);
+      out.globalCompositeOperation = 'source-over';
+      place(masked('lamps', behind(front)), LX, LY, cam, p, soft);
       show('mistW', cam, 1, (t * 10) % 200);
     }
 

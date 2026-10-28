@@ -148,7 +148,8 @@ function peaksToTowers(ctx, t) {
   const A = guilin.silhouette(t - GUILIN), B = shanghai.silhouette(t - SHANGHAI);
   const stretch = 1 + 0.6 * ease.draw(progress(t, SHANGHAI - 0.35, SHANGHAI + 0.05)); // the peaks grow up
   const m = ease.draw(progress(t, SHANGHAI, SHANGHAI + 0.45));
-  const HZ = lerp(690, 760, m); // the water line moves from the Li river to the Huangpu
+  const HZ = lerp(690, 760, m); // the foot of the line moves from the Li river to Pudong
+  const BANK = lerp(690, 812, m); // and the water down to the foot of the embankment
   const pts = [];
   for (let i = 0, x = -100; i < A.length; i++, x += 8) {
     const ya = A[i] == null ? HZ : HZ - (HZ - A[i]) * stretch, yb = B[i] ?? HZ;
@@ -162,14 +163,15 @@ function peaksToTowers(ctx, t) {
   g.addColorStop(0, NIGHT[0]); g.addColorStop(1, NIGHT[1]);
   ctx.fillStyle = g;
   W.fillPoly(ctx, [[-100, -100], [2020, -100], ...pts.slice().reverse()]);
-  // the ink of the silhouette, down to the water; a soft bleed along the crest
+  // the ink of the silhouette, down to the water (the embankment is land); a soft bleed
+  // along the crest
   // a wash: dark ink at the crests, thinner and bluer towards the water
   const top = Math.min(...pts.map((p) => p[1]));
-  const body = ctx.createLinearGradient(0, top, 0, HZ);
+  const body = ctx.createLinearGradient(0, top, 0, BANK);
   body.addColorStop(0, INKB); body.addColorStop(1, '#3f4660');
   ctx.fillStyle = body;
   ctx.filter = 'blur(1.5px)';
-  W.fillPoly(ctx, [...pts, [2020, HZ + 6], [-100, HZ + 6]]);
+  W.fillPoly(ctx, [...pts, [2020, BANK + 6], [-100, BANK + 6]]);
   ctx.filter = 'blur(10px)';
   ctx.strokeStyle = W.rgba(INKB, 0.5);
   ctx.lineWidth = 14;
@@ -177,7 +179,7 @@ function peaksToTowers(ctx, t) {
   ctx.filter = 'none';
   // the river below stays, darkening with the night
   ctx.fillStyle = W.rgba('#434a60', 0.85 * lerp(0.7, 1, m));
-  ctx.fillRect(-100, HZ + 4, 2120, 1180 - HZ);
+  ctx.fillRect(-100, BANK + 4, 2120, 1180 - BANK);
   ctx.restore();
 }
 
