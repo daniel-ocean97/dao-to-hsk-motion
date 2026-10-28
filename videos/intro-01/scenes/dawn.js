@@ -5,7 +5,8 @@
 //            and settles behind her shoulder, where the finale starts
 //   the city lights fly home: overlay() draws, over the cut and this scene, warm strokes that
 //   tear off the windows of Shanghai, sweep through the turn and weave into Rita's hair
-//   (with two wine-red petals); her hair and the sash ends fly up as they arrive
+//   (with wine-red petals); her hair and the sash ends fly up as they arrive; the petals
+//   settle into a glowing halo around her head and stay to the end
 //   2.5-3.7  (15.0-16.2 s) the camera cranes up over her shoulder: she sinks into the lower
 //            third, the sky opens; the sun clears the ridge, a path of light on the water;
 //            the pine near the lens slides out of the frame
@@ -56,10 +57,11 @@
       return [960 + (sx - 960) / z + CAM_END.x * p, 540 + (sy - 540) / z + CAM_END.y * p];
     }
 
-    // The sun: behind the ridge during the return, it clears it at 15-16.2 s and keeps
+    // The sun: behind the ridge during the return (it is cut along the crest, LAKE), it
+    // clears it whole at 15-16.2 s, sitting on the ridge beside the title as a seal, and keeps
     // rising very slowly. How far below its painted place it is:
     const sunY = (T) => T < TM.crane ? lerp(190, 150, progress(T, TM.start, TM.crane))
-      : lerp(150, -40, ease.out(progress(T, TM.crane, TM.crane + 1.2))) - 15 * progress(T, TM.crane + 1.2, TM.end);
+      : lerp(150, -105, ease.out(progress(T, TM.crane, TM.crane + 1.2))) - 15 * progress(T, TM.crane + 1.2, TM.end);
 
     // The wind calms towards the end of the hold.
     const windK = (T) => lerp(1, 0.55, progress(T, TM.dao + 1, TM.end));
@@ -126,7 +128,9 @@
       out.drawImage(back, 0, 0);
       finaleText(out, cam, T);
       const gk = gust(T), turn = ease.draw(progress(T, TM.turn, TM.turn + 0.5));
+      halo(out, T, 'back');
       drawRita(out, cam, { t: T, gust: gk, wind: windK(T) * (1 + 1.1 * gk), swap: { to: 'turn', k: turn } });
+      halo(out, T, 'hair');
       // the pine is near the lens: as the camera cranes up it slides out of the frame
       LAKE.place(out, pine.canvas, pine.ox, pine.oy + 700 * ease.draw(progress(T, TM.crane, TM.crane + 1.0)), cam, 1.7);
       // dawn mist: thick while the turn passes, then it thins and the rock comes out
@@ -159,7 +163,116 @@
       return [k, ease.draw(k) * (1 + s.len)];
     };
     const PETAL_ART = paintPetals(4);
-    const PETALS = [{ ride: 0, lag: 0.07, off: 26, sprite: 1, ph: 1.2 }, { ride: 2, lag: 0.1, off: -30, sprite: 3, ph: 4.0 }];
+    // The petals ride the lights home; near her hair each one leaves its stroke and settles
+    // into a halo around her head (leave: the light's progress k when it lets go). ring: its
+    // place on the halo, an angle (deg, 0 = right, -90 = up) along the upper arc.
+    const PETALS = [
+      { ride: 0, lag: 0.07, off: 26, sprite: 1, ph: 1.2, leave: 0.74 },
+      { ride: 2, lag: 0.1, off: -30, sprite: 3, ph: 4.0, leave: 0.76 },
+      { ride: 1, lag: 0.05, off: 18, sprite: 0, ph: 2.3, leave: 0.72 },
+      { ride: 3, lag: 0.08, off: -22, sprite: 2, ph: 5.1, leave: 0.75 },
+      { ride: 0, lag: 0.13, off: -18, sprite: 2, ph: 0.4, leave: 0.78 },
+      { ride: 2, lag: 0.04, off: 34, sprite: 0, ph: 3.3, leave: 0.73 },
+      { ride: 1, lag: 0.12, off: -34, sprite: 1, ph: 6.0, leave: 0.77 },
+    ];
+    // the halo's places from the left round over the top to the right; the order is mixed so
+    // that petals of one light do not end up side by side; each at its own distance and tilt,
+    // so the halo is loose, not drawn with compasses
+    [3, 0, 5, 2, 6, 1, 4].forEach((slot, i) => {
+      const r = W.rng(600 + i);
+      Object.assign(PETALS[i], { ring: -196 + slot * (212 / 6) + (r() - 0.5) * 10, rv: 0.88 + 0.26 * r(), tilt: (r() - 0.5) * 1.2 });
+    });
+
+    // The halo: around her head, a little above its centre (world, depth 1, where the
+    // finale's camera starts: the head at frame (1497, 345)); it moves with the camera and
+    // a little to the left as she turns her head.
+    const HEAD = [1451, 398], RING = 82;
+    function headAt(T) {
+      const cam = camera(T), z = cam.zoom, turn = ease.draw(progress(T, TM.turn, TM.turn + 0.5));
+      return [960 + z * (HEAD[0] - 18 * turn - 960 - cam.x), 540 + z * (HEAD[1] - 540 - cam.y), z];
+    }
+    const settle = (q) => {
+      const s = LIGHTS[q.ride], t = s.t0 + q.leave * s.dur;
+      return [t, t + 0.85];
+    };
+    // where a petal is while it rides its light: [x, y, rotation, flip]
+    function onPath(q, T) {
+      const s = LIGHTS[q.ride], [, head] = headOf(s, T), tau = T - s.t0;
+      const u = Math.max(0, Math.min(1, Math.min(1, head) - q.lag));
+      const [x, y] = bez(s.P, u);
+      return [x + 14 * Math.sin(tau * 5 + q.ph), y + q.off + 8 * Math.sin(tau * 7 + q.ph), q.ph + tau * 2.4, Math.max(0.15, Math.abs(Math.cos(tau * 5 + q.ph)))];
+    }
+    // its place on the halo: it breathes and sways a little, turns slowly, never spins
+    function onRing(q, T) {
+      const [hx, hy, z] = headAt(T), a = (q.ring + 7 * Math.sin(T * 0.45 + q.ph)) * Math.PI / 180;
+      const r = RING * q.rv * z * (1 + 0.05 * Math.sin(T * 0.9 + q.ph * 2));
+      // lying along the arc, seen partly edge-on (a petal seen full face reads as a heart)
+      return [hx + Math.cos(a) * r, hy + Math.sin(a) * r * 0.95, a + q.tilt + 0.25 * Math.sin(T * 0.7 + q.ph), 0.5 + 0.25 * Math.cos(T * 1.1 + q.ph)];
+    }
+    // how strongly the halo glows: it gathers as the petals settle, breathes slowly and
+    // flares softly with 道
+    function glowK(T) {
+      const gather = ease.out(progress(T, TM.start + 1.6, TM.start + 2.6));
+      const flare = Math.exp(-(((T - TM.dao - 0.25) / 0.45) ** 2));
+      return gather * (0.85 + 0.15 * Math.sin(T * 1.6)) + 0.35 * flare * gather;
+    }
+    function drawPetal(out, q, [x, y, rot, flip], a, glow) {
+      out.setTransform(1, 0, 0, 1, 0, 0);
+      out.translate(x, y);
+      out.rotate(rot);
+      const sc = lerp(1.1, 0.85, Math.min(1, glow));
+      if (glow > 0) {
+        // its own soft golden light behind it
+        const gr = out.createRadialGradient(0, 0, 0, 0, 0, 34);
+        gr.addColorStop(0, W.rgba('#f7cf92', 0.55 * glow)); gr.addColorStop(1, W.rgba('#f7cf92', 0));
+        out.fillStyle = gr;
+        out.fillRect(-34, -34, 68, 68);
+      }
+      out.scale(flip * sc, sc);
+      out.globalAlpha = a;
+      out.drawImage(PETAL_ART[q.sprite], -36, -36);
+      out.globalAlpha = 1;
+    }
+
+    // side 'back': the glow behind her head and the settled petals of the halo (behind her);
+    // 'hair': a warm sheen over her hair, as if it glows (drawn over her); 'front': petals in
+    // flight (overlay).
+    function halo(out, T, side) {
+      const g = glowK(T);
+      const [hx, hy, z] = headAt(T);
+      out.setTransform(1, 0, 0, 1, 0, 0);
+      if (side === 'back' && g > 0) {
+        const R = 190 * z, gr = out.createRadialGradient(hx, hy, 0, hx, hy, R);
+        gr.addColorStop(0, W.rgba('#fbe2b8', 0.8 * g)); gr.addColorStop(0.5, W.rgba('#f4cf9c', 0.42 * g)); gr.addColorStop(1, W.rgba('#f3e3e5', 0));
+        out.fillStyle = gr;
+        out.fillRect(hx - R, hy - R, 2 * R, 2 * R);
+      }
+      if (side === 'hair' && g > 0) {
+        const R = 120 * z, gr = out.createRadialGradient(hx, hy - 10 * z, 0, hx, hy - 10 * z, R);
+        gr.addColorStop(0, W.rgba('#f2c48a', 0.34 * g)); gr.addColorStop(1, W.rgba('#f2c48a', 0));
+        out.globalCompositeOperation = 'screen';
+        out.fillStyle = gr;
+        out.fillRect(hx - R, hy - R, 2 * R, 2 * R);
+        out.globalCompositeOperation = 'source-over';
+        return;
+      }
+      for (const q of PETALS) {
+        const s = LIGHTS[q.ride], k = progress(T, s.t0, s.t0 + s.dur);
+        if (k <= 0.05) continue;
+        const [t0, t1] = settle(q), e = ease.draw(progress(T, t0, t1));
+        if ((side === 'back') !== (e >= 1)) continue;
+        let pos;
+        if (e <= 0) pos = onPath(q, T);
+        else if (e >= 1) pos = onRing(q, T);
+        else {
+          // it leaves the stroke for its place: blend the two motions, so it curves off
+          const A = onPath(q, T), B = onRing(q, T);
+          pos = A.map((v, i) => lerp(v, B[i], e));
+        }
+        drawPetal(out, q, pos, Math.min(1, (k - 0.05) * 8), e * Math.max(0.6, g));
+      }
+      out.setTransform(1, 0, 0, 1, 0, 0);
+    }
 
     function overlay(out, T) {
       out.setTransform(1, 0, 0, 1, 0, 0);
@@ -179,20 +292,7 @@
         const a = 0.9 * Math.min(1, k * 8) * (1 - progress(head, 1, 1 + s.len) * 0.5);
         ribbon(out, segment(s, u0, u1, T), s, a, T);
       }
-      for (const q of PETALS) {
-        const s = LIGHTS[q.ride], [k, head] = headOf(s, T);
-        if (k <= 0.05 || k >= 1) continue;
-        const u = Math.min(1, head) - q.lag;
-        if (u <= 0) continue;
-        const [x, y] = bez(s.P, u), tau = T - s.t0;
-        out.setTransform(1, 0, 0, 1, 0, 0);
-        out.translate(x + 14 * Math.sin(tau * 5 + q.ph), y + q.off + 8 * Math.sin(tau * 7 + q.ph));
-        out.rotate(q.ph + tau * 2.4);
-        out.scale(Math.max(0.15, Math.abs(Math.cos(tau * 5 + q.ph))) * 1.1, 1.1);
-        out.globalAlpha = Math.min(1, (k - 0.05) * 8) * (1 - progress(head, 1, 1 + s.len));
-        out.drawImage(PETAL_ART[q.sprite], -36, -36);
-        out.globalAlpha = 1;
-      }
+      halo(out, T, 'front');
       out.setTransform(1, 0, 0, 1, 0, 0);
     }
 
