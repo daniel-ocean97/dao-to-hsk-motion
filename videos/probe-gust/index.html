@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Проба: порыв ветра (сцена 2)</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: #f5f2ec; }
+  #stage canvas { position: absolute; left: 0; top: 0; display: block; }
+  #paper { mix-blend-mode: multiply; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="out" width="1920" height="1080"></canvas><canvas id="paper" width="1920" height="1080"></canvas></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/rig.js"></script>
+<script src="../../shared/watercolor.js"></script>
+<script src="../../shared/wind.js"></script>
+<script src="../../shared/preview.js"></script>
+<script src="../../characters/rita/rig-art.js"></script>
+<script src="../intro-01/scenes/lake.js"></script>
+<script src="../intro-01/scenes/prologue.js"></script>
+<script>
+// Probe of scene 2, "the gust": 2.5 s of videos/intro-01/scenes/prologue.js, from 2.5 to 5.0
+// (0.5 here = 3.0 in the video, when the gust hits), closed by the paper wipe.
+const DURATION = 2.5;
+const out = document.getElementById('out').getContext('2d');
+(async () => {
+  const scene = await SCENES.prologue({ wipe: true });
+  document.getElementById('paper').getContext('2d').drawImage(DH.wc.paperSheet(1920, 1080), 0, 0);
+  const renderAt = (t) => scene.frame(out, 2.5 + Math.min(Math.max(t, 0), DURATION - 1e-6));
+  window.DURATION = DURATION;
+  window.renderAt = renderAt;
+  DH.preview(renderAt, DURATION);
+})().catch((e) => {
+  document.body.insertAdjacentHTML('afterbegin', `<pre style="color:#f88;font:16px monospace">${e.stack}</pre>`);
+  throw e;
+});
+</script>
+</body>
+</html>

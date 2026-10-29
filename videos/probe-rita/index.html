@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Проба: Рита</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; }
+  #stage svg { display: block; }
+  #ui { position: fixed; left: 12px; right: 12px; bottom: 10px; display: flex; gap: 10px; align-items: center;
+        font: 14px/1 "Segoe UI", sans-serif; color: #ece6dc; }
+  #ui input { flex: 1; }
+  body.render #ui { display: none; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="ui"><button id="play">▶</button><input id="scrub" type="range" min="0" max="6.5" step="0.01" value="0"><span id="time">0.00</span></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/ink.js"></script>
+<script src="../../characters/rita/rita.js"></script>
+<script>
+// Probe of the three riskiest Rita moments (docs/intro-01-storyboard.md, "Риски и проба"):
+//   0.0-3.0  pose A, three-quarter view, steady wind, breath, blink
+//   3.0-5.0  pose B from behind against the dawn, head turns over the shoulder
+//   5.0-6.5  gust: ink strokes tear off the hair tips and fly away
+const { ease, lerp, progress, blink } = DH;
+const { C, defs, layer, landscape, rock, pine, paper, taper } = DH.ink;
+const DURATION = 6.5;
+const stage = document.getElementById('stage');
+
+const RITA_A = { x: 1250, y: 990, sc: 1.0 };
+const RITA_B = { x: 1420, y: 1000, sc: 1.32 };
+
+function sceneA(t) {
+  const k = ease.draw(progress(t, 0, 3));
+  // slow lateral arc with a gentle push-in: foreground pine moves faster than the mountains
+  const cam = { x: lerp(-70, 70, k), y: lerp(0, -12, k), zoom: lerp(1.0, 1.1, k) };
+  const r = DH.rita.poseA({ t, wind: 0.2, blink: blink(t, 2.2) });
+  return landscape(cam, t, { horizon: 700 }) +
+    `<g transform="${layer(cam, 1)}">${rock(RITA_A.x, RITA_A.y, 560)}
+      <g transform="translate(${RITA_A.x} ${RITA_A.y}) scale(${RITA_A.sc})">${r.svg}</g></g>` +
+    `<g transform="${layer(cam, 1.7)}">${pine(-80, -20, 1.5, t, true)}</g>`;
+}
+
+function sceneB(t) {
+  const lt = t - 3;
+  const k = ease.out(progress(lt, 0, 2));
+  // slow crane up: the horizon drifts down, the sky opens above her
+  const cam = { x: lerp(-20, 10, k), y: lerp(40, -25, k), zoom: lerp(1.05, 1.0, k) };
+  const turn = ease.draw(progress(lt, 0.8, 1.4));
+  const r = DH.rita.poseB({ t, wind: 0.22, turn, blink: blink(lt, 1.75) });
+  return landscape(cam, t, { horizon: 700, dawn: true, sun: { x: 900, y: 590 } }) +
+    `<g transform="${layer(cam, 1)}">${rock(RITA_B.x, RITA_B.y - 8, 620)}
+      <g transform="translate(${RITA_B.x} ${RITA_B.y}) scale(${RITA_B.sc})">${r.svg}</g></g>` +
+    `<g transform="${layer(cam, 1.7)}">${pine(-60, -30, 1.3, t, true)}</g>`;
+}
+
+// Ink strokes born at hair tips; positions in Rita's local units.
+const GUST_START = 5.15;
+const STROKES = [1, 3, 5, 7, 8, 9, 10, 11, 12, 13].map((idx, k) => ({ idx, k, t0: GUST_START + 0.18 + k * 0.07 }));
+
+function gustAt(t) { return ease.out(progress(t, GUST_START, GUST_START + 0.45)) * (1 - 0.35 * progress(t, 6.1, 6.5)); }
+
+function strokePos(s, a) {
+  const v = { x: -380 - 50 * (s.k % 4), y: -120 + 40 * (s.k % 3) };
+  return { x: s.tip.x + v.x * a - 60 * a * a, y: s.tip.y + v.y * a + 22 * Math.sin(a * 6 + s.k * 1.7) * Math.min(1, a * 3) };
+}
+
+function strokes(t) {
+  let out = '';
+  for (const s of STROKES) {
+    const a = t - s.t0;
+    if (a <= 0) continue;
+    if (!s.tip) s.tip = DH.rita.poseA({ t: s.t0, wind: 0.2, gust: gustAt(s.t0) }).tips[s.idx];
+    const life = 1 - progress(a, 0.5, 1.25);
+    if (life <= 0) continue;
+    // the tail stays anchored to the hair tip at first, so the stroke pulls out of the hair
+    const pts = [];
+    for (let i = 0; i <= 12; i++) pts.push(strokePos(s, Math.max(0, a - 0.32 + 0.32 * i / 12)));
+    const w = (9 + 4 * (s.k % 3)) * (0.45 + 0.55 * life);
+    // dry brush: three hairs of one stroke with slightly different widths and offsets
+    [[0, 1, 0.92], [-3.2, 0.45, 0.6], [3.4, 0.35, 0.5]].forEach(([off, ww, op]) => {
+      const sh = pts.map((p, i) => ({ x: p.x, y: p.y + off * Math.sin(Math.PI * i / 12) }));
+      out += `<path d="${taper(sh, (u) => 0.6 + w * ww * Math.pow(u, 0.9) * Math.pow(1 - u, 0.25))}"
+        fill="${a < 0.2 ? C.hair : C.ink}" opacity="${(op * life).toFixed(3)}" filter="url(#inkEdge)"/>`;
+    });
+  }
+  // a few muted plum petals as a secondary layer
+  for (let k = 0; k < 4; k++) {
+    const a = t - (GUST_START + 0.25 + k * 0.16);
+    if (a <= 0) continue;
+    const x = -10 - 420 * a - 60 * k, y = -760 + 60 * k - 120 * a + 30 * Math.sin(a * 5 + k);
+    out += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="5" ry="3" transform="rotate(${(a * 400 + k * 50).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})"
+      fill="#e6c3c3" opacity="${(0.85 * (1 - progress(a, 0.8, 1.3))).toFixed(3)}"/>`;
+  }
+  return out;
+}
+
+function sceneGust(t) {
+  const lt = t - 5;
+  // medium shot on her head and shoulders, then the camera accelerates after the strokes
+  const k = ease.draw(progress(lt, 0.25, 1.5));
+  const cam = { x: lerp(170, -120, k), y: lerp(-170, -250, k), zoom: 1.75 };
+  const r = DH.rita.poseA({ t, wind: 0.2, gust: gustAt(t) });
+  return landscape(cam, t, { horizon: 700 }) +
+    `<g transform="${layer(cam, 1)}">${rock(RITA_A.x, RITA_A.y, 560)}
+      <g transform="translate(${RITA_A.x} ${RITA_A.y}) scale(${RITA_A.sc})">${r.svg}${strokes(t)}</g></g>` +
+    `<g transform="${layer(cam, 1.7)}">${pine(-80, -20, 1.5, t, true)}</g>`;
+}
+
+function renderAt(t) {
+  t = Math.min(Math.max(t, 0), DURATION - 1e-6);
+  const body = t < 3 ? sceneA(t) : t < 5 ? sceneB(t) : sceneGust(t);
+  stage.innerHTML = `<svg width="1920" height="1080" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">${defs}${body}${paper}</svg>`;
+}
+
+window.renderAt = renderAt;
+window.DURATION = DURATION;
+
+// Preview UI only: the renderer calls renderAt(t) directly.
+if (new URLSearchParams(location.search).has('render')) {
+  document.body.classList.add('render');
+} else {
+  const fit = () => { stage.style.transform = `scale(${Math.min(innerWidth / 1920, (innerHeight - 40) / 1080)})`; };
+  addEventListener('resize', fit); fit();
+  const scrub = document.getElementById('scrub'), label = document.getElementById('time'), btn = document.getElementById('play');
+  let playing = false, startClock = 0, startT = 0;
+  const show = (t) => { renderAt(t); scrub.value = t; label.textContent = t.toFixed(2); };
+  scrub.oninput = () => { playing = false; btn.textContent = '▶'; show(+scrub.value); };
+  btn.onclick = () => { playing = !playing; btn.textContent = playing ? '❚❚' : '▶'; startClock = performance.now(); startT = +scrub.value; if (playing) tick(); };
+  function tick() { if (!playing) return; show((startT + (performance.now() - startClock) / 1000) % DURATION); requestAnimationFrame(tick); }
+  show(+(new URLSearchParams(location.search).get('t') || 0));
+}
+</script>
+</body>
+</html>

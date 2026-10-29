@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Проба: места маршрута, анимация</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: #f5f2ec; }
+  #stage canvas { position: absolute; left: 0; top: 0; display: block; }
+  #paper { mix-blend-mode: multiply; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="out" width="1920" height="1080"></canvas><canvas id="paper" width="1920" height="1080"></canvas></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/watercolor.js"></script>
+<script src="../../shared/caption.js"></script>
+<script src="../../shared/preview.js"></script>
+<script src="../intro-01/scenes/places.js"></script>
+<script>
+// Probe of the three places (videos/intro-01/scenes/places.js), 2.5 s each:
+// ?place=wall|guilin|shanghai. Painting the layers takes a while before the first frame.
+const DURATION = 2.5;
+const out = document.getElementById('out').getContext('2d');
+(async () => {
+  const place = new URLSearchParams(location.search).get('place') || 'wall';
+  const scene = await SCENES.place(place);
+  document.getElementById('paper').getContext('2d').drawImage(DH.wc.paperSheet(1920, 1080), 0, 0);
+  const renderAt = (t) => scene.frame(out, t);
+  window.DURATION = DURATION;
+  window.renderAt = renderAt;
+  DH.preview(renderAt, DURATION);
+})().catch((e) => {
+  document.body.insertAdjacentHTML('afterbegin', `<pre style="color:#f88;font:16px monospace">${e.stack}</pre>`);
+  throw e;
+});
+</script>
+</body>
+</html>

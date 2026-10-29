@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>intro-01: черновая сборка</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: #f5f2ec; }
+  #stage canvas { position: absolute; left: 0; top: 0; display: block; }
+  #paper { mix-blend-mode: multiply; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="out" width="1920" height="1080"></canvas><canvas id="paper" width="1920" height="1080"></canvas></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/rig.js"></script>
+<script src="../../shared/watercolor.js"></script>
+<script src="../../shared/wind.js"></script>
+<script src="../../shared/caption.js"></script>
+<script src="../../shared/preview.js"></script>
+<script src="../../characters/rita/rig-art.js"></script>
+<script src="scenes/lake.js"></script>
+<script src="scenes/prologue.js"></script>
+<script src="scenes/places.js"></script>
+<script src="scenes/dawn.js"></script>
+<script>
+// intro-01, draft assembly (docs/intro-01-storyboard.md), 24.4 s, timed to the music
+// ("By The Quiet Water" from 3.88 s of the track, music/CREDITS.md): its accents fall on
+// the ink drop (0.54 s), the gust (3.0 s), 道 (19.14 s) and "Dao to HSK" (22.34 s).
+//   0.0-5.0   scenes 1-2, prologue and gust (scenes/prologue.js)
+//   4.6-5.4   a sheet of paper passes through the frame from right to left: its front edge
+//             covers the gust, its back edge uncovers the wall
+//   5.0-9.5   scene 3, the Great Wall (scenes/places.js), slower than the others
+//   9.0-10.3  mist rises over the wall, its ridge stays as an ink silhouette that turns
+//             into the karst peaks of Guilin, the mist clears
+//   9.5-12.5  scene 4, Guilin
+//   12.1-13.45 night falls over Guilin, the peaks stretch up in ink and turn into the Pudong
+//             skyline, the night ebbs into the lit city
+//   12.5-15.5 scene 5, Shanghai
+//   15.2-17.8 the city lights tear off the windows as warm strokes and fly home (scenes/dawn.js)
+//   15.45-16.0 the camera turns: Shanghai slides away, the lake at dawn slides in, both
+//             blurred by the speed, through a band of dawn haze
+//   15.5-18.0 scene 6, the return: out of the mist, Rita from behind; the lights weave into
+//             her hair, the camera settles behind her shoulder
+//   18.0-24.4 scene 7, the finale: crane up, the sun clears the ridge, 道 dào (19.14), she
+//             turns her head (20.5), "Dao to HSK" settles (22.34); 2 s hold
+// Each scene draws into its own buffer; renderAt(t) picks the scenes for time t and
+// composes them. Painting all the layers takes a few minutes before the first frame.
+const { ease, lerp, progress } = DH;
+const W = DH.wc;
+const PAPER = '#f5f2ec';
+// when each scene starts, and the finale's moments (video time, s)
+const WALL = 5.0, GUILIN = 9.5, SHANGHAI = 12.5, DAWN = 15.5, DURATION = 24.4;
+const FINALE = { start: DAWN, crane: 18.0, dao: 19.14, turn: 20.5, title: 22.34, end: DURATION };
+const out = document.getElementById('out').getContext('2d');
+const buf = W.canvas(1920, 1080).getContext('2d'), buf2 = W.canvas(1920, 1080).getContext('2d');
+
+// ---------- the paper pass ----------
+
+// A ragged vertical edge at position x (seeded, so it keeps its shape as it moves); it
+// leans a little, the top ahead of the bottom.
+function edge(x, seed) {
+  const r = W.rng(seed), pts = [];
+  for (let y = -40; y <= 1120; y += 40) pts.push([x + 120 * Math.sin(y * 0.006 + seed) + 60 * (r() - 0.5) - (y / 1080) * 180, y]);
+  return pts;
+}
+// The region right of an edge, as a closed polygon.
+const rightOf = (pts) => [...pts, [2400, 1120], [2400, -40]];
+
+// The sheet: front edge from 4.58 to 4.98 s (as the paper wipe of the gust probe), back
+// edge from 4.9 to 5.35 s. Returns the two edge x positions, or null outside the pass.
+function sheet(t) {
+  if (t < 4.58 || t > 5.35) return null;
+  return {
+    front: lerp(2150, -400, ease.draw(progress(t, 4.58, 4.98))),
+    back: lerp(2150, -400, ease.draw(progress(t, 4.9, 5.35))),
+  };
+}
+
+function fillSoft(ctx, poly, color, blur) {
+  ctx.fillStyle = color;
+  ctx.filter = `blur(${blur}px)`;
+  W.fillPoly(ctx, poly);
+  ctx.filter = 'none';
+}
+
+// ---------- the ridges turn into peaks ----------
+
+const MIST = '#f1f0ec', SIL = '#6f7a80', SIL_EDGE = '#3e3a36';
+
+// The mist over the wall-Guilin cut: rises, stays thick while the scenes swap, clears.
+const mistK = (t) => 0.93 * ease.draw(progress(t, GUILIN - 0.5, GUILIN - 0.05)) * (1 - ease.draw(progress(t, GUILIN + 0.35, GUILIN + 0.8)));
+
+function mist(ctx, a) {
+  if (a <= 0) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const g = ctx.createLinearGradient(0, 0, 0, 1080);
+  g.addColorStop(0, W.rgba(MIST, a * 0.85));
+  g.addColorStop(1, W.rgba(MIST, a));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 1920, 1080);
+}
+
+// The silhouette over the mist: the wall's ridge, then morphing into the tall karst peaks.
+function ridgeMorph(ctx, t) {
+  const a = 0.8 * ease.out(progress(t, GUILIN - 0.35, GUILIN - 0.05)) * (1 - ease.draw(progress(t, GUILIN + 0.4, GUILIN + 0.8)));
+  if (a <= 0) return;
+  const A = wall.silhouette(t - WALL), B = guilin.silhouette(t - GUILIN);
+  const m = ease.draw(progress(t, GUILIN - 0.05, GUILIN + 0.35));
+  const pts = [];
+  for (let i = 0, x = -100; i < A.length; i++, x += 8) {
+    const ya = A[i] ?? 1100, yb = B[i] ?? 1100;
+    pts.push([x, lerp(ya, yb, m)]);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // the body of the hills: a wash that fades downwards into the mist
+  const top = Math.min(...pts.map((p) => p[1]));
+  const g = ctx.createLinearGradient(0, top, 0, top + 420);
+  g.addColorStop(0, W.rgba(SIL, a * 0.6));
+  g.addColorStop(1, W.rgba(SIL, 0));
+  ctx.fillStyle = g;
+  ctx.filter = 'blur(2px)';
+  W.fillPoly(ctx, [...pts, [2020, 1180], [-100, 1180]]);
+  // the ink line along the crest
+  ctx.strokeStyle = W.rgba(SIL_EDGE, a * 0.55);
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.filter = 'blur(0.6px)';
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.stroke();
+  ctx.filter = 'none';
+}
+
+// ---------- the peaks grow into towers ----------
+
+// Night falls over Guilin: the sky above the line of the peaks floods with the night sky of
+// Shanghai, the peaks below it turn to dark ink and stretch up; the line then becomes the
+// Pudong skyline; under the full flood the scenes swap, then the flood ebbs and the line is
+// the city. NIGHT: the Shanghai sky (scenes/places.js), INKB: the body of the silhouette.
+const NIGHT = ['#3b4560', '#8c8597'], INKB = '#262b3a';
+const nightK = (t) => ease.draw(progress(t, SHANGHAI - 0.4, SHANGHAI + 0.1)) * (1 - ease.draw(progress(t, SHANGHAI + 0.4, SHANGHAI + 0.95)));
+
+function peaksToTowers(ctx, t) {
+  const a = nightK(t);
+  if (a <= 0) return;
+  const A = guilin.silhouette(t - GUILIN), B = shanghai.silhouette(t - SHANGHAI);
+  const stretch = 1 + 0.6 * ease.draw(progress(t, SHANGHAI - 0.35, SHANGHAI + 0.05)); // the peaks grow up
+  const m = ease.draw(progress(t, SHANGHAI, SHANGHAI + 0.45));
+  const HZ = lerp(690, 760, m); // the foot of the line moves from the Li river to Pudong
+  const BANK = lerp(690, 812, m); // and the water down to the foot of the embankment
+  const pts = [];
+  for (let i = 0, x = -100; i < A.length; i++, x += 8) {
+    const ya = A[i] == null ? HZ : HZ - (HZ - A[i]) * stretch, yb = B[i] ?? HZ;
+    pts.push([x, Math.min(HZ, lerp(ya, yb, m))]);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = a;
+  // the sky above the line
+  const g = ctx.createLinearGradient(0, 0, 0, HZ);
+  g.addColorStop(0, NIGHT[0]); g.addColorStop(1, NIGHT[1]);
+  ctx.fillStyle = g;
+  W.fillPoly(ctx, [[-100, -100], [2020, -100], ...pts.slice().reverse()]);
+  // the ink of the silhouette, down to the water (the embankment is land); a soft bleed
+  // along the crest
+  // a wash: dark ink at the crests, thinner and bluer towards the water
+  const top = Math.min(...pts.map((p) => p[1]));
+  const body = ctx.createLinearGradient(0, top, 0, BANK);
+  body.addColorStop(0, INKB); body.addColorStop(1, '#3f4660');
+  ctx.fillStyle = body;
+  ctx.filter = 'blur(1.5px)';
+  W.fillPoly(ctx, [...pts, [2020, BANK + 6], [-100, BANK + 6]]);
+  ctx.filter = 'blur(10px)';
+  ctx.strokeStyle = W.rgba(INKB, 0.5);
+  ctx.lineWidth = 14;
+  ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+  ctx.filter = 'none';
+  // the river below stays, darkening with the night
+  ctx.fillStyle = W.rgba('#434a60', 0.85 * lerp(0.7, 1, m));
+  ctx.fillRect(-100, BANK + 4, 2120, 1180 - BANK);
+  ctx.restore();
+}
+
+// ---------- the turn back ----------
+
+// The whip pan from Shanghai to the lake: the two frames side by side with a band of dawn
+// haze between them, sliding left; blurred along x by the speed.
+const GAP = 420, TURN = [DAWN - 0.05, DAWN + 0.5];
+const squash = W.canvas(1920, 1080), sq = squash.getContext('2d');
+// src drawn at x, blurred along x by about `amount` px: squeezed to a narrow strip and
+// stretched back (the browser smooths it), plus a light ordinary blur
+function motionBlur(ctx, src, x, amount) {
+  const f = 1 + amount / 6, w = Math.max(8, Math.round(1920 / f));
+  sq.clearRect(0, 0, 1920, 1080);
+  sq.drawImage(src, 0, 0, w, 1080);
+  ctx.filter = `blur(${(amount / 12).toFixed(1)}px)`;
+  ctx.drawImage(squash, 0, 0, w, 1080, x, 0, 1920, 1080);
+  ctx.filter = 'none';
+}
+function turnBack(t) {
+  const k = progress(t, TURN[0], TURN[1]), e = ease.draw(k), off = e * (1920 + GAP);
+  const speed = Math.sin(Math.PI * k); // 0 at both ends, fastest in the middle
+  shanghai.frame(buf, t - SHANGHAI);
+  dawn.frame(buf2, t - DAWN);
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  out.fillStyle = '#c9b6bb';
+  out.fillRect(0, 0, 1920, 1080);
+  motionBlur(out, buf.canvas, -off, 180 * speed);
+  motionBlur(out, buf2.canvas, 1920 + GAP - off, 180 * speed);
+  // a broad band of dawn haze over the seam, from the night's colour to the dawn's
+  const c = 1920 + GAP / 2 - off, half = 700;
+  const g = out.createLinearGradient(c - half, 0, c + half, 0);
+  g.addColorStop(0, 'rgba(108,101,120,0)'); g.addColorStop(0.35, 'rgba(150,135,155,0.85)');
+  g.addColorStop(0.5, 'rgba(226,200,200,0.97)'); g.addColorStop(0.65, 'rgba(242,220,214,0.85)');
+  g.addColorStop(1, 'rgba(242,220,214,0)');
+  out.fillStyle = g;
+  out.fillRect(c - half, 0, 2 * half, 1080);
+}
+
+// ---------- timeline ----------
+
+let prologue, wall, guilin, shanghai, dawn;
+function renderAt(t) {
+  t = Math.min(Math.max(t, 0), DURATION - 1e-6);
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  if (t >= DAWN - 0.3) {
+    if (t < TURN[0]) shanghai.frame(out, t - SHANGHAI);
+    else if (t < TURN[1]) turnBack(t);
+    else dawn.frame(out, t - DAWN);
+    dawn.overlay(out, t);
+    return;
+  }
+  if (t >= SHANGHAI - 0.4) {
+    // under the full night flood Guilin gives way to Shanghai
+    if (t < SHANGHAI + 0.25) guilin.frame(out, t - GUILIN);
+    else shanghai.frame(out, t - SHANGHAI);
+    peaksToTowers(out, t);
+    out.setTransform(1, 0, 0, 1, 0, 0);
+    return;
+  }
+  if (t >= GUILIN - 0.5) {
+    // under the thickest mist the wall gives way to Guilin
+    if (t < GUILIN + 0.15) wall.frame(out, t - WALL);
+    else guilin.frame(out, t - GUILIN);
+    mist(out, mistK(t));
+    ridgeMorph(out, t);
+    out.setTransform(1, 0, 0, 1, 0, 0);
+    return;
+  }
+  const s = sheet(t);
+  if (t < 4.98) prologue.frame(out, t);
+  else if (!s) { wall.frame(out, t - WALL); return; }
+  if (!s) return;
+  // the sheet covers everything right of its front edge (wet, soft edge)
+  const front = edge(s.front, 77), back = edge(s.back, 79);
+  out.setTransform(1, 0, 0, 1, 0, 0);
+  fillSoft(out, rightOf(front), PAPER, 10);
+  W.fillPoly(out, rightOf(front.map(([x, y]) => [x + 28, y])));
+  // and the wall comes through right of its back edge
+  if (s.back < 2150) {
+    wall.frame(buf, t - WALL);
+    out.save();
+    out.beginPath();
+    rightOf(back.map(([x, y]) => [x + 20, y])).forEach(([x, y], i) => (i ? out.lineTo(x, y) : out.moveTo(x, y)));
+    out.closePath();
+    out.clip();
+    out.drawImage(buf.canvas, 0, 0);
+    out.restore();
+    // a soft paper rim along the back edge, so the cut is not hard
+    out.save();
+    out.filter = 'blur(12px)';
+    out.fillStyle = PAPER;
+    out.beginPath();
+    back.forEach(([x, y], i) => (i ? out.lineTo(x + 40, y) : out.moveTo(x + 40, y)));
+    [...back].reverse().forEach(([x, y]) => out.lineTo(x - 10, y));
+    out.closePath();
+    out.fill();
+    out.restore();
+  }
+  out.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+(async () => {
+  [prologue, wall, guilin, shanghai, dawn] = await Promise.all([
+    SCENES.prologue({ wipe: false }),
+    SCENES.place('wall', { duration: GUILIN - WALL }),
+    SCENES.place('guilin', { duration: SHANGHAI - GUILIN }),
+    SCENES.place('shanghai', { duration: DAWN - SHANGHAI }),
+    SCENES.dawn({ times: FINALE }),
+  ]);
+  document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
+  window.DURATION = DURATION;
+  window.renderAt = renderAt;
+  DH.preview(renderAt, DURATION);
+})().catch((e) => {
+  document.body.insertAdjacentHTML('afterbegin', `<pre style="color:#f88;font:16px monospace">${e.stack}</pre>`);
+  throw e;
+});
+</script>
+</body>
+</html>

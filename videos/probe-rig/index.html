@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Проба: анимация слоёв Риты</title>
+<style>
+  html, body { margin: 0; background: #1b1a18; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; }
+  #stage svg { position: absolute; left: 0; top: 0; display: block; }
+  #ui { position: fixed; left: 12px; right: 12px; bottom: 10px; display: flex; gap: 10px; align-items: center;
+        font: 14px/1 "Segoe UI", sans-serif; color: #ece6dc; }
+  #ui input { flex: 1; }
+  body.render #ui { display: none; }
+</style>
+</head>
+<body>
+<div id="stage"><svg id="back" width="1920" height="1080" viewBox="0 0 1920 1080"></svg><svg id="front" width="1920" height="1080" viewBox="0 0 1920 1080"></svg></div>
+<div id="ui"><button id="play">▶</button><input id="scrub" type="range" min="0" max="8" step="0.01" value="0"><span id="time">0.00</span></div>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/ink.js"></script>
+<script src="../../shared/rig.js"></script>
+<script src="../../characters/rita/rig-placeholder.js"></script>
+<script>
+// Probe of the rig on stand-in images (render/placeholders.py), not on the final art:
+//   0.0-4.0  pose A: wind in hair, sash and hem, breath, blink at 1.6, gust 2.8-3.6
+//   4.0-8.0  pose B at dawn: head turn swapped at 5.6-5.9, blink at 7.0
+// ?debug shows the mesh and bent regions; ?debug=turn (or blink) also the swap region.
+const { ease, lerp, progress, blink } = DH;
+const { C, defs, layer, landscape, rock, pine, paper } = DH.ink;
+const DURATION = 8;
+const params = new URLSearchParams(location.search);
+const debug = params.has('debug') ? (params.get('debug') || true) : false;
+const back = document.getElementById('back'), front = document.getElementById('front');
+
+// Image height in scene units: the figure comes out about as tall as in videos/probe-rita.
+const RITA_A = { x: 1250, y: 990, h: 767 };
+const RITA_B = { x: 1420, y: 1000, h: 780 };
+
+function gustAt(t) { return ease.out(progress(t, 2.8, 3.1)) * (1 - ease.draw(progress(t, 3.3, 3.9))); }
+
+function sceneA(t, rig) {
+  const k = ease.draw(progress(t, 0, 4));
+  const cam = { x: lerp(-70, 70, k), y: lerp(0, -12, k), zoom: lerp(1.0, 1.1, k) };
+  back.innerHTML = defs + landscape(cam, t, { horizon: 700 }) +
+    `<g transform="${layer(cam, 1)}">${rock(RITA_A.x, RITA_A.y, 560)}</g>`;
+  front.innerHTML = `<g transform="${layer(cam, 1.7)}">${pine(-80, -20, 1.5, t, true)}</g>${paper}`;
+  const closed = blink(t, 1.6) > 0.35 ? 1 : 0;
+  rig.drawAt({ t, gust: gustAt(t), swap: { to: 'blink', k: closed }, debug }, { cam, ...RITA_A });
+}
+
+function sceneB(t, rig) {
+  const lt = t - 4;
+  const k = ease.out(progress(lt, 0, 4));
+  const cam = { x: lerp(-20, 10, k), y: lerp(40, -25, k), zoom: lerp(1.05, 1.0, k) };
+  back.innerHTML = defs + landscape(cam, t, { horizon: 700, dawn: true, sun: { x: 900, y: 590 } }) +
+    `<g transform="${layer(cam, 1)}">${rock(RITA_B.x, RITA_B.y - 8, 620)}</g>`;
+  front.innerHTML = `<g transform="${layer(cam, 1.7)}">${pine(-60, -30, 1.3, t, true)}</g>${paper}`;
+  // head turn: the turned image fades in over the head region only
+  const turn = ease.draw(progress(lt, 1.6, 1.9));
+  const o = turn < 1
+    ? { t, state: 'base', swap: { to: 'turn', k: turn } }
+    : { t, state: 'turn', swap: { to: 'turn-blink', k: blink(lt, 3.0) > 0.35 ? 1 : 0 } };
+  rig.drawAt({ ...o, debug }, { cam, ...RITA_B });
+}
+
+let rigA, rigB;
+function renderAt(t) {
+  t = Math.min(Math.max(t, 0), DURATION - 1e-6);
+  const a = t < 4;
+  rigA.canvas.style.display = a ? 'block' : 'none';
+  rigB.canvas.style.display = a ? 'none' : 'block';
+  if (a) sceneA(t, rigA); else sceneB(t, rigB);
+}
+
+Promise.all([
+  DH.rig.load(DH.ritaRig.a, { base: '../../', paper: C.paper }),
+  DH.rig.load(DH.ritaRig.b, { base: '../../', paper: C.paper }),
+]).then(([a, b]) => {
+  rigA = a; rigB = b;
+  // between the landscape and the foreground pine
+  front.before(rigA.canvas, rigB.canvas);
+  window.DURATION = DURATION;
+  window.renderAt = renderAt;
+  startPreview();
+}).catch((e) => {
+  document.body.insertAdjacentHTML('afterbegin', `<pre style="color:#f88;font:16px monospace">${e.message}\nЗапусти render/placeholders.py и открой страницу через http (см. README).</pre>`);
+  throw e;
+});
+
+// Preview UI only: the renderer calls renderAt(t) directly.
+function startPreview() {
+  if (params.has('render')) { document.body.classList.add('render'); return; }
+  const stage = document.getElementById('stage');
+  const fit = () => { stage.style.transform = `scale(${Math.min(innerWidth / 1920, (innerHeight - 40) / 1080)})`; };
+  addEventListener('resize', fit); fit();
+  const scrub = document.getElementById('scrub'), label = document.getElementById('time'), btn = document.getElementById('play');
+  let playing = false, startClock = 0, startT = 0;
+  const show = (t) => { renderAt(t); scrub.value = t; label.textContent = t.toFixed(2); };
+  scrub.oninput = () => { playing = false; btn.textContent = '▶'; show(+scrub.value); };
+  btn.onclick = () => { playing = !playing; btn.textContent = playing ? '❚❚' : '▶'; startClock = performance.now(); startT = +scrub.value; if (playing) tick(); };
+  function tick() { if (!playing) return; show((startT + (performance.now() - startClock) / 1000) % DURATION); requestAnimationFrame(tick); }
+  show(+(params.get('t') || 0));
+}
+</script>
+</body>
+</html>
