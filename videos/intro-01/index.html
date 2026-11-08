@@ -25,7 +25,7 @@
 <script src="scenes/places.js"></script>
 <script src="scenes/dawn.js"></script>
 <script>
-// intro-01, draft assembly (docs/intro-01-storyboard.md), 24.4 s, timed to the music
+// intro-01, draft assembly (docs/intro-01-storyboard.md), 26.4 s, timed to the music
 // ("By The Quiet Water" from 3.88 s of the track, music/CREDITS.md): its accents fall on
 // the ink drop (0.54 s), the gust (3.0 s), 道 (19.14 s) and "Dao to HSK" (22.34 s).
 //   0.0-5.0   scenes 1-2, prologue and gust (scenes/prologue.js)
@@ -43,16 +43,16 @@
 //             blurred by the speed, through a band of dawn haze
 //   15.5-18.0 scene 6, the return: out of the mist, Rita from behind; the lights weave into
 //             her hair, the camera settles behind her shoulder
-//   18.0-24.4 scene 7, the finale: crane up, the sun clears the ridge, 道 dào (19.14), she
-//             turns her head (20.5), "Dao to HSK" settles (22.34); 2 s hold
+//   18.0-26.4 scene 7, the finale: crane up, the sun clears the ridge, 道 dào (19.14), she
+//             turns her head (20.5), "to HSK" settles (22.34), then I; 4 s ending hold
 // Each scene draws into its own buffer; renderAt(t) picks the scenes for time t and
 // composes them. Painting all the layers takes a few minutes before the first frame.
 const { ease, lerp, progress } = DH;
 const W = DH.wc;
 const PAPER = '#f5f2ec';
 // when each scene starts, and the finale's moments (video time, s)
-const WALL = 5.0, GUILIN = 9.5, SHANGHAI = 12.5, DAWN = 15.5, DURATION = 24.4;
-const FINALE = { start: DAWN, crane: 18.0, dao: 19.14, turn: 20.5, title: 22.34, end: DURATION };
+const WALL = 5.0, GUILIN = 9.5, SHANGHAI = 12.5, DAWN = 15.5, DURATION = 26.4;
+const FINALE = { start: DAWN, crane: 18.0, dao: 19.14, turn: 20.5, title: 22.34, end: 24.4 };
 const out = document.getElementById('out').getContext('2d');
 const buf = W.canvas(1920, 1080).getContext('2d'), buf2 = W.canvas(1920, 1080).getContext('2d');
 
@@ -217,6 +217,9 @@ function turnBack(t) {
   g.addColorStop(1, 'rgba(242,220,214,0)');
   out.fillStyle = g;
   out.fillRect(c - half, 0, 2 * half, 1080);
+  // Keep the petals and their trails in screen space while the city and dawn layers
+  // pass behind them. Their seeded path then remains continuous across the scene turn.
+  dawn.overlay(out, t);
 }
 
 // ---------- timeline ----------
@@ -226,10 +229,15 @@ function renderAt(t) {
   t = Math.min(Math.max(t, 0), DURATION - 1e-6);
   out.setTransform(1, 0, 0, 1, 0, 0);
   if (t >= DAWN - 0.3) {
-    if (t < TURN[0]) shanghai.frame(out, t - SHANGHAI);
+    if (t < TURN[0]) {
+      shanghai.frame(out, t - SHANGHAI);
+      dawn.overlay(out, t);
+    }
     else if (t < TURN[1]) turnBack(t);
-    else dawn.frame(out, t - DAWN);
-    dawn.overlay(out, t);
+    else {
+      dawn.frame(out, t - DAWN);
+      dawn.overlay(out, t);
+    }
     return;
   }
   if (t >= SHANGHAI - 0.4) {
