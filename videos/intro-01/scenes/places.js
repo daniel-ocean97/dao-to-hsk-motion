@@ -16,6 +16,7 @@
   g.SCENES.place = async function (PLACE, { duration = 2.5 } = {}) {
     const W = DH.wc;
     const { rgba, wash, dryStroke, taper, fillPoly, rng } = W;
+    const D = DH.details;
     const out = W.canvas(1920, 1080).getContext('2d');
     const DURATION = 2.5;
 
@@ -40,6 +41,12 @@
       out.globalAlpha = alpha;
       out.drawImage(img, 0, 0);
       out.globalAlpha = 1;
+    }
+    // The transform for drawing in world coords at depth p; returns the zoom at that depth.
+    function view(cam, p) {
+      const z = 1 + (cam.zoom - 1) * p;
+      out.setTransform(z, 0, 0, z, 960 + z * (-960 - cam.x * p), 540 + z * (-540 - cam.y * p));
+      return z;
     }
     const show = (name, cam, alpha = 1, dx = 0, dy = 0) => place(LAYERS[name].c, LX + dx, LY + dy, cam, LAYERS[name].p, alpha);
 
@@ -227,6 +234,14 @@
       // middle range: muted green slopes; the wall along its crest on its own layer
       begin('mid', 0.5);
       ctx.drawImage(W.mountains({ w: 2400, h: 760, ox: -240, oy: 300, ridge: midR, color: '#9aa391', deep: '#6f7a68', fadeTo: 900, ink: 18, inkColor: INK2, seed: 77, under: '#ebe8e0' }), -240, 300);
+      // small pines scattered over the slopes under the wall, pale with distance
+      const rp = rng(83);
+      for (let i = 0; i < 60; i++) {
+        const q = midR[Math.floor(rp() * midR.length)];
+        if (q[1] > 600) continue;
+        const x = q[0] + (rp() - 0.5) * 40, y = q[1] + 40 + rp() * Math.min(150, 640 - q[1]);
+        D.pine(ctx, x, y, 16 + rp() * 14, { seed: 840 + i, color: '#3f4a3c', alpha: 0.3 + 0.2 * rp() });
+      }
       const wallRidge = midR.filter(([x]) => x > -80 && x < 2080);
       begin('wall', 0.5, { ridge: wallRidge, drops: spatter(wallRidge, 90) });
       greatWall(ctx, wallRidge, { thick: (x) => 17 - 3 * (x / 2000), towers: [320, 784, 1400, 1856], seed: 80 });
@@ -235,6 +250,13 @@
       begin('near', 1);
       const L3 = W.mountains({ w: 2400, h: 600, ox: -240, oy: 640, ridge: near, color: '#55574f', deep: '#2f312b', fadeTo: 1200, ink: 26, inkColor: INK, seed: 79, under: '#e7e3da' });
       ctx.drawImage(L3, -240, 640);
+      // pines on the near ridge, dark against the mist
+      for (const [i, x] of [170, 330, 1010, 1500, 1790].entries()) {
+        const q = near.reduce((a, b) => (Math.abs(b[0] - x) < Math.abs(a[0] - x) ? b : a));
+        D.pine(ctx, q[0], q[1] + 6, 62 + ((i * 37) % 40), { seed: 860 + i, color: INK, alpha: 0.8 });
+      }
+      HAWK = D.flock({ n: 1, seed: 62, spread: [0, 0], size: 17 });
+      FLOCK = D.flock({ n: 4, seed: 63, spread: [60, 18], size: 6 });
     }
 
     // A calligraphy brush seen from the side, held slanting back and up: a dark tapered tuft
@@ -287,6 +309,10 @@
       // even pace, so the brush is seen writing the whole way, not dashing off at the start
       const head = DH.lerp(-120, 2120, DH.ease.draw(DH.progress(t, 0.05, 2.3)));
       show('sky', cam); show('far', cam);
+      // a hawk soars in a slow circle over the valley; far behind it a few birds
+      view(cam, 0.3);
+      D.birds(out, HAWK, 1380 + Math.cos(t * 0.9) * 130, 215 + Math.sin(t * 0.9) * 34, t, { color: INK2, alpha: 0.55, glide: true });
+      D.birds(out, FLOCK, 900 - 30 * t, 330 + 4 * t, t, { color: INK2, alpha: 0.3 });
       show('mistA', cam, 1, (t * 14) % 200);
       caption(cam, t); // in the sky, behind the ridges and the brush
       show('mid', cam);
@@ -395,6 +421,20 @@
       wash(c, hat, '#a38652', { layers: 8, alpha: 0.1, seed: 320 });
       dryStroke(c, [[fx - 18 * s, fy - 35 * s], [fx + 0.5 * s, fy - 49 * s], [fx + 19 * s, fy - 35 * s]], 1.8 * s, INK, { alpha: 0.75, hairs: 1, dry: 0.15, seed: 321 });
       dryStroke(c, [[fx + 4 * s, fy - 26 * s], [fx + 37 * s, fy + 4 * s], [fx + 70 * s, fy + 34 * s]], 2.2 * s, INK, { alpha: 0.8, hairs: 1, dry: 0.2, seed: 322 });
+      // a cormorant on the bow (the fishermen of the Li river fish with them): a dark bird
+      // standing upright, its neck in an S, the beak forward
+      const cbx = x - L / 2 + 0.1 * L, cby = y - curve(0.1) - s;
+      c.fillStyle = rgba('#241d1a', 0.88);
+      c.save();
+      c.translate(cbx, cby - 9 * s); c.rotate(1.0);
+      c.beginPath(); c.ellipse(0, 0, 10 * s, 4.6 * s, 0, 0, Math.PI * 2); c.fill();
+      c.restore();
+      const neck = [];
+      for (let k = 0; k <= 8; k++) { const u = k / 8; neck.push([cbx - (4 + 3.5 * u - Math.sin(u * Math.PI) * 3.5) * s, cby - (15 + 15 * u) * s]); }
+      fillPoly(c, taper(neck, (u) => (4.4 - 1.8 * u) * s));
+      c.beginPath(); c.ellipse(cbx - 8.6 * s, cby - 30.6 * s, 3.5 * s, 2.5 * s, -0.2, 0, Math.PI * 2); c.fill();
+      fillPoly(c, [[cbx - 10 * s, cby - 32 * s], [cbx - 18.5 * s, cby - 29.4 * s], [cbx - 10 * s, cby - 29.2 * s]]);
+      fillPoly(c, taper([[cbx + 4 * s, cby - 4 * s], [cbx + 8 * s, cby], [cbx + 11 * s, cby + 3 * s]], (u) => (5 - 3 * u) * s));
       // reflection at the waterline, soft, and ripples from the pole
       const wl = Math.max(...hull.map(([, b0]) => b0));
       c.save();
@@ -465,7 +505,10 @@
       mist(HZ + 4, 60, '#eef0ef', 101, 0.8);
       const bl = begin('boat', 1);
       Object.assign(bl, boat(ctx, 760, 905, 1.4));
+      FLOCK = D.flock({ n: 6, seed: 61, spread: [80, 26], size: 8 });
+      BAMBOO = D.bamboo({ seed: 7 });
     }
+    let FLOCK, BAMBOO, HAWK;
 
     // Peaks come out of the mist one after another from left to right; the camera glides low
     // over the river; the boat moves slowly to the left, bobbing, ripples spread from the pole.
@@ -480,6 +523,9 @@
         m.fillRect(LX, LY, LW, LH);
       });
       place(img, LX, LY, cam, LAYERS.far.p);
+      // far birds cross the sky in front of the tall peaks
+      view(cam, 0.25);
+      D.birds(out, FLOCK, 520 + 50 * t, 250 - 8 * t, t, { color: INK2, alpha: 0.42 });
       show('mistA', cam, 1, (t * 12) % 200);
       show('mid', cam);
       // water: the reflection wavers in thin horizontal slices
@@ -490,13 +536,40 @@
         out.setTransform(z, 0, 0, z, 960 + z * (LX + dx - 960 - cam.x * Wt.p), 540 + z * (LY + y - 540 - cam.y * Wt.p));
         out.drawImage(Wt.c, 0, y, LW, 3, 0, 0, LW, 3);
       }
+      // a second boat far off under the peaks, a pale silhouette half in the mist
+      view(cam, 0.6);
+      {
+        out.translate(1150 + t * 14, 728 + Math.sin(t * 1.7 + 1) * 0.6);
+        out.scale(1.5, 1.5);
+        const x = 0, y = 0;
+        out.filter = 'blur(0.7px)';
+        out.fillStyle = out.strokeStyle = rgba('#4a5356', 0.5);
+        out.beginPath();
+        out.moveTo(x - 27, y - 4); out.quadraticCurveTo(x, y + 5, x + 27, y - 4);
+        out.lineTo(x + 22, y); out.quadraticCurveTo(x, y + 7, x - 22, y);
+        out.closePath(); out.fill();
+        out.fillRect(x + 11, y - 13, 2.6, 12);
+        fillPoly(out, [[x + 6, y - 12], [x + 12.3, y - 17], [x + 18.6, y - 12]]);
+        out.lineWidth = 1;
+        out.beginPath(); out.moveTo(x + 13, y - 9); out.lineTo(x + 31, y + 4); out.stroke();
+        out.filter = 'none';
+      }
       show('mistB', cam, 1, -((t * 16) % 200));
       caption(cam, t); // over the water, the boat passes in front
+      // a fish rises now and then
+      view(cam, 0.9);
+      D.ring(out, 1150, 990, t - 0.7, { size: 46, alpha: 0.35 });
+      D.ring(out, 400, 830, t - 1.5, { size: 30, alpha: 0.3 });
       const B = LAYERS.boat, bx = DH.lerp(60, -110, t / DURATION), by = Math.sin(t * 2.1) * 1.6;
       place(B.c, LX + bx, LY + by, cam, B.p);
       const zb = 1 + (cam.zoom - 1) * B.p;
       out.setTransform(zb, 0, 0, zb, 960 + zb * (bx - 960 - cam.x * B.p), 540 + zb * (-540 - cam.y * B.p));
       ripples(out, B.tip, B.s, t);
+      // bamboo by the lens in the top right corner, out of focus, swaying a little
+      const zn = 1 + (cam.zoom - 1) * 1.6;
+      out.setTransform(zn, 0, 0, zn, 960 + zn * (2010 - 960 - cam.x * 1.6), 540 + zn * (-70 - 540 - cam.y * 1.6));
+      out.rotate(Math.sin(t * 1.3) * 0.012 - 0.01);
+      out.drawImage(BAMBOO.canvas, -BAMBOO.ax, -BAMBOO.ay);
     }
 
     // ---------- Shanghai ----------
@@ -577,6 +650,15 @@
     const winB = Array.from({ length: NB }, () => { const c = W.canvas(LW, LH), x = c.getContext('2d'); x.translate(-LX, -LY); return { c, x }; });
     const glowB = Array.from({ length: NB }, () => { const c = W.canvas(LW, LH), x = c.getContext('2d'); x.translate(-LX, -LY); return { c, x }; });
     const gx = glowB[0].x; // the Pearl and other steady lights
+    // Small life of the night, drawn per frame: windows that go on and off, stars, the red
+    // warning lights on the tops of the towers (world coords, the depth of the city).
+    const TWINKLE = [];
+    const STARS = (() => {
+      const r = rng(950), a = [];
+      for (let i = 0; i < 60; i++) a.push({ x: -100 + r() * 2120, y: -40 + 470 * Math.pow(r(), 1.6), r: 0.7 + r() * 0.9, a: 0.2 + 0.35 * r(), ph: r() * 6.283, rate: 2 + r() * 3 });
+      return a;
+    })();
+    const BEACONS = [[640, 160], [1090, 320], [1241, 120], [1402, 240], [1438, 240]];
 
     // Lit windows in floors: dabs on a grid inside the building, some floors dark.
     function windows(c, poly, { seed, density = 0.35, step = [8, 11] }) {
@@ -596,6 +678,15 @@
           winB[b].x.beginPath(); winB[b].x.ellipse(ex, y, rx, ry, 0, 0, Math.PI * 2); winB[b].x.fill();
           glowB[b].x.fillStyle = rgba(col, a);
           glowB[b].x.beginPath(); glowB[b].x.ellipse(ex, y, rx * 1.4, ry * 1.6, 0, 0, Math.PI * 2); glowB[b].x.fill();
+        }
+      }
+      // a few more windows that go on and off while we look (their own random sequence, so
+      // the painted ones stay as they were)
+      const r2 = rng(seed + 7000);
+      for (let y = Math.min(...ys) + 8; y < Math.max(...ys) - 4; y += step[1]) {
+        for (let x = Math.min(...xs) + 5; x < Math.max(...xs) - 3; x += step[0]) {
+          if (r2() > 0.022 || !c.isPointInPath(path, x - LX, y - LY)) continue;
+          TWINKLE.push({ x, y, rx: 1.9 + r2() * 1.3, ry: 1.4 + r2() * 0.6, col: r2() < 0.75 ? '#f2c886' : '#f6ddd2', ph: r2() * 6.283, period: 1.3 + r2() * 1.8 });
         }
       }
     }
@@ -924,15 +1015,39 @@
       const on = (i) => smooth(DH.progress(t, 0.1 + i * 0.32, 0.55 + i * 0.32)) * (1 - 0.4 * dawn);
       show('sky', cam);
       show('skyDawn', cam, dawn);
+      // the last stars, fading as the sky pales
+      view(cam, 0.05);
+      for (const s of STARS) {
+        out.fillStyle = rgba('#efe6d8', s.a * (1 - dawn) * (0.7 + 0.3 * Math.sin(t * s.rate + s.ph)));
+        out.beginPath(); out.arc(s.x, s.y, s.r, 0, Math.PI * 2); out.fill();
+      }
       caption(cam, t); // in the sky, behind the towers
       show('city', cam);
       for (let i = 0; i < NB; i++) show('win' + i, cam, i === 0 ? Math.max(0.6, on(0)) : on(i));
+      // some windows go on and off
+      view(cam, 0.45);
+      for (const w of TWINKLE) {
+        const a = smooth((Math.sin((t * 6.283) / w.period + w.ph) - 0.2) / 0.5) * on(1);
+        if (a < 0.01) continue;
+        out.fillStyle = rgba(w.col, 0.8 * a);
+        out.beginPath(); out.ellipse(w.x, w.y, w.rx, w.ry, 0, 0, Math.PI * 2); out.fill();
+      }
       out.globalCompositeOperation = 'screen';
       show('haze', cam, 0.7 + 0.3 * on(1));
       for (let i = 0; i < NB; i++) {
         const a = i === 0 ? Math.max(0.6, on(0)) : on(i);
         show('glowW' + i, cam, 0.8 * a);
         show('glowN' + i, cam, 0.6 * a);
+      }
+      // red warning lights on the tops of the towers blink slowly, out of step
+      view(cam, 0.45);
+      for (const [i, [x, y]] of BEACONS.entries()) {
+        const a = Math.pow(Math.max(0, Math.sin(t * 5.2 + i * 1.9)), 3) * (1 - 0.5 * dawn);
+        if (a < 0.01) continue;
+        const gr = out.createRadialGradient(x, y, 0, x, y, 13);
+        gr.addColorStop(0, rgba('#e0705e', 0.75 * a)); gr.addColorStop(1, rgba('#e0705e', 0));
+        out.fillStyle = gr;
+        out.fillRect(x - 13, y - 13, 26, 26);
       }
       out.globalCompositeOperation = 'source-over';
       show('water', cam);
@@ -950,6 +1065,41 @@
       place(masked('lampRefl', behind(front)), LX, LY, cam, p, 0.8 * soft);
       out.globalCompositeOperation = 'source-over';
       place(masked('lamps', behind(front)), LX, LY, cam, p, soft);
+      // a ferry crosses the river: a low hull, a row of warm windows, their broken
+      // reflection, a pale wake behind it
+      view(cam, 0.8);
+      {
+        const x = 1760 - 44 * t, y = WL + 64 + Math.sin(t * 1.9) * 0.5;
+        const wake = out.createLinearGradient(x + 40, 0, x + 220, 0);
+        wake.addColorStop(0, rgba('#9aa0b4', 0.3)); wake.addColorStop(1, rgba('#9aa0b4', 0));
+        out.fillStyle = wake;
+        out.fillRect(x + 40, y - 0.5, 180, 1.4);
+        out.fillRect(x + 70, y + 3, 120, 1);
+        // muted colours, so it is not a black cut-out: a wine hull with an ochre stripe, a
+        // cabin in the lilac grey of the sky
+        const FC = { hull: '#5e2a33', stripe: '#c9a46a', cabin: '#8c8597', roof: '#3b3346' };
+        // its dark reflection under the hull
+        out.fillStyle = rgba('#1d2130', 0.3);
+        out.beginPath(); out.ellipse(x - 2, y + 4, 50, 3.5, 0, 0, Math.PI * 2); out.fill();
+        out.fillStyle = rgba(FC.hull, 0.95);
+        fillPoly(out, [[x - 54, y - 7], [x + 50, y - 7], [x + 44, y], [x - 46, y]]);
+        out.fillStyle = rgba(FC.stripe, 0.7);
+        out.fillRect(x - 52, y - 7, 101, 1.3);
+        out.fillStyle = rgba(FC.cabin, 0.95);
+        fillPoly(out, [[x - 30, y - 15], [x + 26, y - 15], [x + 30, y - 7], [x - 34, y - 7]]);
+        out.fillStyle = rgba(FC.roof, 0.95);
+        fillPoly(out, [[x - 32, y - 17], [x + 28, y - 17], [x + 27, y - 14.6], [x - 31, y - 14.6]]);
+        out.fillRect(x - 4, y - 23, 3.2, 6);
+        for (let k = 0; k < 6; k++) {
+          out.fillStyle = rgba('#f6ddb0', 0.9 * soft);
+          out.beginPath(); out.ellipse(x - 25 + k * 10, y - 10.6, 1.9, 1.5, 0, 0, Math.PI * 2); out.fill();
+        }
+        for (let k = 0; k < 9; k++) {
+          const u = k / 9, rx = x - 2 + Math.sin(k * 2.1 + t * 3.1) * (10 + 12 * u);
+          out.fillStyle = rgba('#efc485', 0.5 * soft * (1 - u));
+          out.beginPath(); out.ellipse(rx, y + 5 + k * 3.4, 16 - 8 * u, 1.2, 0, 0, Math.PI * 2); out.fill();
+        }
+      }
       show('mistW', cam, 1, (t * 10) % 200);
     }
 

@@ -25,7 +25,7 @@
     const PAL = LAKE.PALETTES.morning, { view, place } = LAKE;
     const INK = '#24170f', HAIR = '#3a2820', PAPER = '#f5f2ec';
     const paintPlace = () => LAKE.paint(PAL, { x: 1250, w: 520, seed: 3 });
-    const drawPlace = (L, cam, T) => LAKE.draw(bctx, L, cam, T); // video time: always >= 0
+    const drawPlace = (L, cam, T, o) => LAKE.draw(bctx, L, cam, T, 0, o); // video time: always >= 0
 
     // ---------- the gust and the camera ----------
 
@@ -323,7 +323,8 @@
       const t = T - 2.5;
       cam = camera(t);
       bctx.setTransform(1, 0, 0, 1, 0, 0);
-      drawPlace(L, cam, T);
+      // far birds drift across the sky on the right; the gust bends the reeds
+      drawPlace(L, cam, T, { wind: 1 + 1.6 * gust(t), birds: [1700 - 45 * T, 265 - 4 * T] });
       fctx.setTransform(1, 0, 0, 1, 0, 0);
       fctx.clearRect(0, 0, 1920, 1080);
       const order = STROKES.filter((s) => !s.screen).sort((a, b) => a.p - b.p);

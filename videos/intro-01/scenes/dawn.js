@@ -133,7 +133,11 @@
     function frame(out, tau) {
       tau = Math.max(0, tau);
       const T = TM.start + tau, cam = camera(T);
-      LAKE.draw(bctx, L, cam, T, sunY(T));
+      // far birds come in from the right during the finale and reach the sun by the end
+      LAKE.draw(bctx, L, cam, T, sunY(T), {
+        wind: windK(T) * (1 + 1.2 * gust(T)),
+        birds: [1979 - 116 * (T - TM.crane), 211 + 11.5 * (T - TM.crane)],
+      });
       sunPath(bctx, cam, T);
       out.setTransform(1, 0, 0, 1, 0, 0);
       out.drawImage(back, 0, 0);
@@ -263,12 +267,12 @@
       q.startFlip = releasePose[3];
       q.scatterDistance = Math.hypot(target[0] - head[0], target[1] - head[1]);
     }
-    // Twenty restrained tails follow the widest-scattering petals, spread evenly across
+    // Twelve restrained tails (of 24 petals) follow the widest-scattering petals, spread evenly across
     // the four city streams. The first in each group also carries its city's handoff.
     for (let ride = 0; ride < LIGHTS.length; ride++) {
       PETALS.filter((q) => q.ride === ride)
         .sort((a, b) => b.scatterDistance - a.scatterDistance)
-        .slice(0, 5)
+        .slice(0, 3)
         .forEach((q) => { q.vortex = true; });
     }
     const VORTEX_PETALS = LIGHTS.map((_, ride) => PETALS
@@ -339,7 +343,18 @@
       const appear = ease.out(progress(T, q.vortexStart, q.vortexStart + 0.12));
       const fade = 1 - ease.out(progress(head, scatterU * 0.78, scatterU * 1.24));
       const alpha = 0.58 * appear * fade;
-      const trailStart = Math.max(q.release, T - q.vortexTrailTime);
+      // The tail reaches back along the petal's own path until it is long enough to be
+      // seen: only its wet head is dark, and behind a slow petal that part would stay
+      // hidden under the petal itself. 1.2 s back at most.
+      let back = q.vortexTrailTime, len = 0, prev = petalAt(q, T);
+      for (let dt = 0.05; dt <= 1.2 && T - dt >= q.release; dt += 0.05) {
+        const pt = petalAt(q, T - dt);
+        len += Math.hypot(pt[0] - prev[0], pt[1] - prev[1]);
+        prev = pt;
+        if (dt >= q.vortexTrailTime && len >= 170) { back = dt; break; }
+        back = dt;
+      }
+      const trailStart = Math.max(q.release, T - back);
       if (alpha > 0.002 && T - trailStart > 0.025) {
         const points = [];
         for (let j = 0; j <= 32; j++) {
@@ -348,6 +363,9 @@
           points.push([x, y]);
         }
         const trail = { ...s, w: s.w * 0.64, seed: s.seed + q.vortexSeed };
+        // frame coords: the petal drawn before this one leaves its own transform on the
+        // context, and the tail would land away from its petal
+        out.setTransform(1, 0, 0, 1, 0, 0);
         ribbon(out, points, trail, alpha, T);
       }
       drawVortex(out, q, T);
