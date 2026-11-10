@@ -34,8 +34,8 @@ shared/              общий код: таймлайн, фильтры туш�
 render/              скрипт покадрового рендера и сборки MP4
 music/               музыка и звуки с указанием лицензии
 out/                 кадры и готовые MP4 (в git не попадают)
-.agents/skills/      Codex skills: vizavi-motion и explain
-.codex/agents/       Codex subagent: chinese-checker
+.claude/skills/      скиллы Claude Code: vizavi-motion и explain
+.claude/agents/      субагент Claude Code: chinese-checker
 ```
 
 ## Первоначальная настройка

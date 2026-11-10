@@ -20,8 +20,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Local Codex settings (keep project instructions and agent definitions tracked)
-.codex/config.local.toml
+# Claude Code personal settings (keep project instructions, skills and agents tracked)
+.claude/settings.local.json
+.claude/launch.json
 
 # Music the licence does not let us redistribute as a file (music/CREDITS.md)
 music/local/

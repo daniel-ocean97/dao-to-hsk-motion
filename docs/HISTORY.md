@@ -33,6 +33,19 @@
 
 ## Журнал
 
+### 2026-11-10 — Возврат проекта на Claude Code
+
+**Сделано:** `AGENTS.md` переименован обратно в `CLAUDE.md`; skills перенесены
+из `.agents/skills/` в `.claude/skills/`; агент `chinese-checker` переведён из
+`.codex/agents/chinese-checker.toml` в `.claude/agents/chinese-checker.md`
+(текст инструкций сохранён, доступ только на чтение: Read, Grep, Glob). Ссылки
+в `README.md`, `.gitignore` и документах обновлены.
+**Решения:** перенесли всё, что добавили за время работы в Codex, а не
+откатили коммит перевода: иначе потерялись бы новые правила и тексты.
+**Уроки:** Claude Code ищет правила в `CLAUDE.md`, скиллы — в
+`.claude/skills/<имя>/SKILL.md`, агентов — в `.claude/agents/*.md`;
+Codex — в `AGENTS.md`, `.agents/skills/` и `.codex/agents/*.toml`.
+
 ### 2026-11-07 — Возвращены последние две секунды музыки
 
 **Сделано:** ролик продлён с 24,4 до 26,4 с, чтобы использовать полный
