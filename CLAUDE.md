@@ -79,6 +79,7 @@ docs/character-rita.md   описание персонажа (вместо фо�
 docs/rita-generation.md  как получить иллюстрацию Риты в генераторе
 docs/intro-01-plan.md    план первого ролика
 docs/locations.md        библиотека мест: слоты день/ночь, паспорт локации
+docs/location-briefs.md  брифы новых мест (Хуаншань, Фэнхуан)
 .claude/skills/         скиллы: vizavi-motion, location, explain
 .claude/agents/         субагенты: chinese-checker
 characters/rita/         SVG персонажа по слоям
