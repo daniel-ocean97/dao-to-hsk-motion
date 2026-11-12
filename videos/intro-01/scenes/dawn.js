@@ -165,11 +165,13 @@
 
     // In frame coords, video time. Each stream starts at lit windows in Shanghai and follows
     // its linked petal only until the petal detaches over the city.
+    // the first point of each stream: a light of the night place (its passport, locations/)
+    const FROM = opt.lights || [[1180, 520], [1380, 430], [760, 610], [1560, 610]];
     const LIGHTS = [
-      { P: [[1180, 520], [760, 420], [260, 360], [420, 180], [900, 260], [1150, 420], [1318, 548]], t0: TM.start - 0.3, dur: 2.35, w: 34, len: 0.3, wave: 10, seed: 41, color: '#a8643a' },
-      { P: [[1380, 430], [1000, 300], [520, 260], [360, 520], [760, 640], [1120, 560], [1340, 580]], t0: TM.start - 0.22, dur: 2.3, w: 28, len: 0.28, wave: 12, seed: 42, color: '#b8834a' },
-      { P: [[760, 610], [420, 560], [150, 420], [380, 300], [820, 380], [1180, 470], [1306, 590]], t0: TM.start - 0.16, dur: 2.32, w: 30, len: 0.3, wave: 9, seed: 43, color: '#7b1e2b' },
-      { P: [[1560, 610], [1200, 700], [700, 760], [520, 600], [880, 480], [1200, 500], [1352, 534]], t0: TM.start - 0.1, dur: 2.28, w: 26, len: 0.27, wave: 11, seed: 44, color: '#c9a46a' },
+      { P: [FROM[0], [760, 420], [260, 360], [420, 180], [900, 260], [1150, 420], [1318, 548]], t0: TM.start - 0.3, dur: 2.35, w: 34, len: 0.3, wave: 10, seed: 41, color: '#a8643a' },
+      { P: [FROM[1], [1000, 300], [520, 260], [360, 520], [760, 640], [1120, 560], [1340, 580]], t0: TM.start - 0.22, dur: 2.3, w: 28, len: 0.28, wave: 12, seed: 42, color: '#b8834a' },
+      { P: [FROM[2], [420, 560], [150, 420], [380, 300], [820, 380], [1180, 470], [1306, 590]], t0: TM.start - 0.16, dur: 2.32, w: 30, len: 0.3, wave: 9, seed: 43, color: '#7b1e2b' },
+      { P: [FROM[3], [1200, 700], [700, 760], [520, 600], [880, 480], [1200, 500], [1352, 534]], t0: TM.start - 0.1, dur: 2.28, w: 26, len: 0.27, wave: 11, seed: 44, color: '#c9a46a' },
     ];
     // the head eases in and out, so it settles into the hair; then the tail runs in after it
     const headOf = (s, T) => {

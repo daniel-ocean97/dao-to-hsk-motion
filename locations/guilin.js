@@ -225,6 +225,8 @@
   DH.location.define('guilin', {
     name: 'Гуйлинь',
     time: 'day',
+    horizon: 690, // the Li river
+    hasWater: true, // the river below the horizon
     // low over the river on the right (the boat is on the left), mirrored in the water
     caption: { hanzi: '桂林', pinyin: 'Guìlín', x: 1440, y: 770, p: 0.8, t0: 0.15, tOut: 2.05, wind: [560, -30],
       reflect: { below: 16, alpha: 0.3, waver: 4, depth: 240 } },

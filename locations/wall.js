@@ -288,6 +288,8 @@
   DH.location.define('wall', {
     name: 'Великая стена',
     time: 'day',
+    horizon: 700, // frame y of the foot of the ridge (for the cut to night)
+    hasWater: false, // land down to the bottom of the frame
     caption: { hanzi: '长城', pinyin: 'Chángchéng', x: 400, y: 250, p: 0.35, t0: 0.15, tOut: 2.05, wind: [560, -70] },
     camera: DH.location.glide({ x: -110, y: 10, zoom: 1.03 }, { x: 130, y: -10, zoom: 1.12 }),
     setup,

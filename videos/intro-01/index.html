@@ -34,16 +34,19 @@
 // the ink drop (0.54 s), the gust (3.0 s), 道 (19.14 s) and "Dao to HSK" (22.34 s).
 //   0.0-5.0   scenes 1-2, prologue and gust (scenes/prologue.js)
 //   4.6-5.4   a sheet of paper passes through the frame from right to left: its front edge
-//             covers the gust, its back edge uncovers the wall
-//   5.0-9.5   scene 3, the Great Wall (locations/wall.js), slower than the others
-//   9.0-10.3  mist rises over the wall, its ridge stays as an ink silhouette that turns
-//             into the karst peaks of Guilin, the mist clears
-//   9.5-12.5  scene 4, Guilin
-//   12.1-13.45 night falls over Guilin, the peaks stretch up in ink and turn into the Pudong
-//             skyline, the night ebbs into the lit city
-//   12.5-15.5 scene 5, Shanghai
-//   15.2-17.8 the city lights tear off the windows as warm strokes and fly home (scenes/dawn.js)
-//   15.45-16.0 the camera turns: Shanghai slides away, the lake at dawn slides in, both
+//             covers the gust, its back edge uncovers slot 1
+// Scenes 3-5 are the route: three places from the library (locations/, docs/locations.md),
+// set by ?route=day,day,night (default wall,guilin,shanghai). Slots 1-2 take day places,
+// slot 3 a night place with lights.
+//   5.0-9.5   scene 3, slot 1 (the Great Wall), slower than the others
+//   9.0-10.3  mist rises over slot 1, its ridge stays as an ink silhouette that turns
+//             into the ridge of slot 2, the mist clears
+//   9.5-12.5  scene 4, slot 2 (Guilin)
+//   12.1-13.45 night falls over slot 2, its ridge stretches up in ink and turns into the
+//             skyline of slot 3, the night ebbs into the lit night place
+//   12.5-15.5 scene 5, slot 3 (Shanghai)
+//   15.2-17.8 the lights of slot 3 tear off as warm strokes and fly home (scenes/dawn.js)
+//   15.45-16.0 the camera turns: the night place slides away, the lake at dawn slides in, both
 //             blurred by the speed, through a band of dawn haze
 //   15.5-18.0 scene 6, the return: out of the mist, Rita from behind; the lights weave into
 //             her hair, the camera settles behind her shoulder
@@ -55,8 +58,18 @@ const { ease, lerp, progress } = DH;
 const W = DH.wc;
 const PAPER = '#f5f2ec';
 // when each scene starts, and the finale's moments (video time, s)
-const WALL = 5.0, GUILIN = 9.5, SHANGHAI = 12.5, DAWN = 15.5, DURATION = 26.4;
+const S1 = 5.0, S2 = 9.5, S3 = 12.5, DAWN = 15.5, DURATION = 26.4;
 const FINALE = { start: DAWN, crane: 18.0, dao: 19.14, turn: 20.5, title: 22.34, end: 24.4 };
+// The route: three location ids. Slots 1-2 need day places, slot 3 a night one.
+const ROUTE = (new URLSearchParams(location.search).get('route') || 'wall,guilin,shanghai').split(',');
+function checkRoute(ids) {
+  if (ids.length !== 3) throw new Error(`route needs 3 places, got ${ids.length}: ${ids}`);
+  ids.forEach((id, i) => {
+    const def = DH.location.get(id), want = i < 2 ? 'day' : 'night';
+    if (!def) throw new Error(`unknown place "${id}": add its <script src="../../locations/${id}.js"> to this page`);
+    if (def.time !== want) throw new Error(`slot ${i + 1} needs a ${want} place, "${id}" is ${def.time}`);
+  });
+}
 const out = document.getElementById('out').getContext('2d');
 const buf = W.canvas(1920, 1080).getContext('2d'), buf2 = W.canvas(1920, 1080).getContext('2d');
 
@@ -89,12 +102,12 @@ function fillSoft(ctx, poly, color, blur) {
   ctx.filter = 'none';
 }
 
-// ---------- the ridges turn into peaks ----------
+// ---------- slot 1 -> slot 2: through the mist ----------
 
 const MIST = '#f1f0ec', SIL = '#6f7a80', SIL_EDGE = '#3e3a36';
 
-// The mist over the wall-Guilin cut: rises, stays thick while the scenes swap, clears.
-const mistK = (t) => 0.93 * ease.draw(progress(t, GUILIN - 0.5, GUILIN - 0.05)) * (1 - ease.draw(progress(t, GUILIN + 0.35, GUILIN + 0.8)));
+// The mist over the cut from slot 1 to slot 2: rises, stays thick while the scenes swap, clears.
+const mistK = (t) => 0.93 * ease.draw(progress(t, S2 - 0.5, S2 - 0.05)) * (1 - ease.draw(progress(t, S2 + 0.35, S2 + 0.8)));
 
 function mist(ctx, a) {
   if (a <= 0) return;
@@ -106,12 +119,12 @@ function mist(ctx, a) {
   ctx.fillRect(0, 0, 1920, 1080);
 }
 
-// The silhouette over the mist: the wall's ridge, then morphing into the tall karst peaks.
+// The silhouette over the mist: the ridge of slot 1, then morphing into the ridge of slot 2.
 function ridgeMorph(ctx, t) {
-  const a = 0.8 * ease.out(progress(t, GUILIN - 0.35, GUILIN - 0.05)) * (1 - ease.draw(progress(t, GUILIN + 0.4, GUILIN + 0.8)));
+  const a = 0.8 * ease.out(progress(t, S2 - 0.35, S2 - 0.05)) * (1 - ease.draw(progress(t, S2 + 0.4, S2 + 0.8)));
   if (a <= 0) return;
-  const A = wall.silhouette(t - WALL), B = guilin.silhouette(t - GUILIN);
-  const m = ease.draw(progress(t, GUILIN - 0.05, GUILIN + 0.35));
+  const A = s1.silhouette(t - S1), B = s2.silhouette(t - S2);
+  const m = ease.draw(progress(t, S2 - 0.05, S2 + 0.35));
   const pts = [];
   for (let i = 0, x = -100; i < A.length; i++, x += 8) {
     const ya = A[i] ?? 1100, yb = B[i] ?? 1100;
@@ -137,23 +150,26 @@ function ridgeMorph(ctx, t) {
   ctx.filter = 'none';
 }
 
-// ---------- the peaks grow into towers ----------
+// ---------- slot 2 -> slot 3: night falls ----------
 
-// Night falls over Guilin: the sky above the line of the peaks floods with the night sky of
-// Shanghai, the peaks below it turn to dark ink and stretch up; the line then becomes the
-// Pudong skyline; under the full flood the scenes swap, then the flood ebbs and the line is
-// the city. NIGHT: the Shanghai sky (locations/shanghai.js), INKB: the body of the silhouette.
-const NIGHT = ['#3b4560', '#8c8597'], INKB = '#262b3a';
-const nightK = (t) => ease.draw(progress(t, SHANGHAI - 0.4, SHANGHAI + 0.1)) * (1 - ease.draw(progress(t, SHANGHAI + 0.4, SHANGHAI + 0.95)));
+// Night falls over slot 2: the sky above its ridge floods with the night sky of slot 3, the
+// ridge below it turns to dark ink and stretches up; the line then becomes the skyline of
+// slot 3; under the full flood the scenes swap, then the flood ebbs and the line is the night
+// place. The night sky, water and bank come from the passport of slot 3 (its `night`),
+// INKB is the body of the silhouette.
+const INKB = '#262b3a';
+const nightK = (t) => ease.draw(progress(t, S3 - 0.4, S3 + 0.1)) * (1 - ease.draw(progress(t, S3 + 0.4, S3 + 0.95)));
 
-function peaksToTowers(ctx, t) {
+function nightFalls(ctx, t) {
   const a = nightK(t);
   if (a <= 0) return;
-  const A = guilin.silhouette(t - GUILIN), B = shanghai.silhouette(t - SHANGHAI);
-  const stretch = 1 + 0.6 * ease.draw(progress(t, SHANGHAI - 0.35, SHANGHAI + 0.05)); // the peaks grow up
-  const m = ease.draw(progress(t, SHANGHAI, SHANGHAI + 0.45));
-  const HZ = lerp(690, 760, m); // the foot of the line moves from the Li river to Pudong
-  const BANK = lerp(690, 812, m); // and the water down to the foot of the embankment
+  const A = s2.silhouette(t - S2), B = s3.silhouette(t - S3), N = s3.def.night;
+  const stretch = 1 + 0.6 * ease.draw(progress(t, S3 - 0.35, S3 + 0.05)); // the ridge grows up
+  const m = ease.draw(progress(t, S3, S3 + 0.45));
+  const HZ = lerp(s2.def.horizon, s3.def.horizon, m); // the foot of the line moves to slot 3
+  // and the water down to its bank; a place without water is land down to the bottom of
+  // the frame, the water of slot 3 rises from below
+  const BANK = lerp(s2.def.hasWater ? s2.def.horizon : 1180, N.bank, m);
   const pts = [];
   for (let i = 0, x = -100; i < A.length; i++, x += 8) {
     const ya = A[i] == null ? HZ : HZ - (HZ - A[i]) * stretch, yb = B[i] ?? HZ;
@@ -164,7 +180,7 @@ function peaksToTowers(ctx, t) {
   ctx.globalAlpha = a;
   // the sky above the line
   const g = ctx.createLinearGradient(0, 0, 0, HZ);
-  g.addColorStop(0, NIGHT[0]); g.addColorStop(1, NIGHT[1]);
+  g.addColorStop(0, N.sky[0]); g.addColorStop(1, N.sky[1]);
   ctx.fillStyle = g;
   W.fillPoly(ctx, [[-100, -100], [2020, -100], ...pts.slice().reverse()]);
   // the ink of the silhouette, down to the water (the embankment is land); a soft bleed
@@ -181,15 +197,15 @@ function peaksToTowers(ctx, t) {
   ctx.lineWidth = 14;
   ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
   ctx.filter = 'none';
-  // the river below stays, darkening with the night
-  ctx.fillStyle = W.rgba('#434a60', 0.85 * lerp(0.7, 1, m));
+  // the water below stays, darkening with the night
+  ctx.fillStyle = W.rgba(N.water, 0.85 * lerp(0.7, 1, m));
   ctx.fillRect(-100, BANK + 4, 2120, 1180 - BANK);
   ctx.restore();
 }
 
 // ---------- the turn back ----------
 
-// The whip pan from Shanghai to the lake: the two frames side by side with a band of dawn
+// The whip pan from the night place to the lake: the two frames side by side with a band of dawn
 // haze between them, sliding left; blurred along x by the speed.
 const GAP = 420, TURN = [DAWN - 0.05, DAWN + 0.5];
 const squash = W.canvas(1920, 1080), sq = squash.getContext('2d');
@@ -206,7 +222,7 @@ function motionBlur(ctx, src, x, amount) {
 function turnBack(t) {
   const k = progress(t, TURN[0], TURN[1]), e = ease.draw(k), off = e * (1920 + GAP);
   const speed = Math.sin(Math.PI * k); // 0 at both ends, fastest in the middle
-  shanghai.frame(buf, t - SHANGHAI);
+  s3.frame(buf, t - S3);
   dawn.frame(buf2, t - DAWN);
   out.setTransform(1, 0, 0, 1, 0, 0);
   out.fillStyle = '#c9b6bb';
@@ -221,20 +237,20 @@ function turnBack(t) {
   g.addColorStop(1, 'rgba(242,220,214,0)');
   out.fillStyle = g;
   out.fillRect(c - half, 0, 2 * half, 1080);
-  // Keep the petals and their trails in screen space while the city and dawn layers
+  // Keep the petals and their trails in screen space while the night place and dawn layers
   // pass behind them. Their seeded path then remains continuous across the scene turn.
   dawn.overlay(out, t);
 }
 
 // ---------- timeline ----------
 
-let prologue, wall, guilin, shanghai, dawn;
+let prologue, s1, s2, s3, dawn;
 function renderAt(t) {
   t = Math.min(Math.max(t, 0), DURATION - 1e-6);
   out.setTransform(1, 0, 0, 1, 0, 0);
   if (t >= DAWN - 0.3) {
     if (t < TURN[0]) {
-      shanghai.frame(out, t - SHANGHAI);
+      s3.frame(out, t - S3);
       dawn.overlay(out, t);
     }
     else if (t < TURN[1]) turnBack(t);
@@ -244,18 +260,18 @@ function renderAt(t) {
     }
     return;
   }
-  if (t >= SHANGHAI - 0.4) {
-    // under the full night flood Guilin gives way to Shanghai
-    if (t < SHANGHAI + 0.25) guilin.frame(out, t - GUILIN);
-    else shanghai.frame(out, t - SHANGHAI);
-    peaksToTowers(out, t);
+  if (t >= S3 - 0.4) {
+    // under the full night flood slot 2 gives way to slot 3
+    if (t < S3 + 0.25) s2.frame(out, t - S2);
+    else s3.frame(out, t - S3);
+    nightFalls(out, t);
     out.setTransform(1, 0, 0, 1, 0, 0);
     return;
   }
-  if (t >= GUILIN - 0.5) {
-    // under the thickest mist the wall gives way to Guilin
-    if (t < GUILIN + 0.15) wall.frame(out, t - WALL);
-    else guilin.frame(out, t - GUILIN);
+  if (t >= S2 - 0.5) {
+    // under the thickest mist slot 1 gives way to slot 2
+    if (t < S2 + 0.15) s1.frame(out, t - S1);
+    else s2.frame(out, t - S2);
     mist(out, mistK(t));
     ridgeMorph(out, t);
     out.setTransform(1, 0, 0, 1, 0, 0);
@@ -263,16 +279,16 @@ function renderAt(t) {
   }
   const s = sheet(t);
   if (t < 4.98) prologue.frame(out, t);
-  else if (!s) { wall.frame(out, t - WALL); return; }
+  else if (!s) { s1.frame(out, t - S1); return; }
   if (!s) return;
   // the sheet covers everything right of its front edge (wet, soft edge)
   const front = edge(s.front, 77), back = edge(s.back, 79);
   out.setTransform(1, 0, 0, 1, 0, 0);
   fillSoft(out, rightOf(front), PAPER, 10);
   W.fillPoly(out, rightOf(front.map(([x, y]) => [x + 28, y])));
-  // and the wall comes through right of its back edge
+  // and slot 1 comes through right of its back edge
   if (s.back < 2150) {
-    wall.frame(buf, t - WALL);
+    s1.frame(buf, t - S1);
     out.save();
     out.beginPath();
     rightOf(back.map(([x, y]) => [x + 20, y])).forEach(([x, y], i) => (i ? out.lineTo(x, y) : out.moveTo(x, y)));
@@ -295,12 +311,13 @@ function renderAt(t) {
 }
 
 (async () => {
-  [prologue, wall, guilin, shanghai, dawn] = await Promise.all([
+  checkRoute(ROUTE);
+  [prologue, s1, s2, s3, dawn] = await Promise.all([
     SCENES.prologue({ wipe: false }),
-    DH.location.make('wall', { duration: GUILIN - WALL }),
-    DH.location.make('guilin', { duration: SHANGHAI - GUILIN }),
-    DH.location.make('shanghai', { duration: DAWN - SHANGHAI }),
-    SCENES.dawn({ times: FINALE }),
+    DH.location.make(ROUTE[0], { duration: S2 - S1 }),
+    DH.location.make(ROUTE[1], { duration: S3 - S2 }),
+    DH.location.make(ROUTE[2], { duration: DAWN - S3 }),
+    SCENES.dawn({ times: FINALE, lights: DH.location.get(ROUTE[2]).night.lights }),
   ]);
   document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
   window.DURATION = DURATION;

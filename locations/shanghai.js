@@ -533,6 +533,17 @@
   DH.location.define('shanghai', {
     name: 'Шанхай',
     time: 'night',
+    horizon: 760, // the foot of the Pudong towers
+    // what the cut into the night and the finale need from a night place:
+    //   sky     the night sky, top and low colour (the night floods in with it)
+    //   water   the colour of the water (or ground) under the bank
+    //   bank    frame y where the water starts
+    //   lights  frame points of 4 bright lights at the end of the scene: the ribbons of
+    //           light fly from them to Rita (videos/intro-01/scenes/dawn.js)
+    night: {
+      sky: ['#3b4560', '#8c8597'], water: '#434a60', bank: 812,
+      lights: [[1180, 520], [1380, 430], [760, 610], [1560, 610]],
+    },
     // light ink in the night sky left of the Pearl, behind the towers
     caption: { hanzi: '上海', pinyin: 'Shànghǎi', x: 330, y: 300, p: 0.35, t0: 0.15, tOut: 2.05, wind: [560, -70],
       ink: '#f1e8da', ink2: '#ddd3c4' },
