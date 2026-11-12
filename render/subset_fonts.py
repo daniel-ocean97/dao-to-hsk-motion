@@ -2,7 +2,7 @@
 
 Noto Serif SC holds ~30 000 characters (25 MB). The videos need a handful, so the
 committed fonts/NotoSerifSC-subset.ttf keeps only the Chinese characters found in
-videos/ and shared/. Latin text is set in Onest (pinyin) or Cormorant Garamond. After
+videos/, shared/ and locations/. Latin text is set in Onest (pinyin) or Cormorant Garamond. After
 adding a new character to a scene, run this script again and commit the new subset.
 
 Onest and Cormorant Garamond are small and committed whole; the script only checks
@@ -53,7 +53,7 @@ def fetch(url: str, name: str, sha: str) -> Path:
 
 def used_hanzi() -> str:
     found: set[str] = set()
-    for folder in ("videos", "shared"):
+    for folder in ("videos", "shared", "locations"):
         for path in (ROOT / folder).rglob("*"):
             if path.suffix in {".html", ".js"}:
                 found |= set(HANZI.findall(path.read_text(encoding="utf-8")))

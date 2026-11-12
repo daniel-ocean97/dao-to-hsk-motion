@@ -78,9 +78,13 @@ docs/brand.md            палитра и шрифты бренда для ро
 docs/character-rita.md   описание персонажа (вместо фото)
 docs/rita-generation.md  как получить иллюстрацию Риты в генераторе
 docs/intro-01-plan.md    план первого ролика
-.claude/skills/         скиллы: vizavi-motion, explain
+docs/locations.md        библиотека мест: слоты день/ночь, паспорт локации
+docs/location-briefs.md  брифы новых мест (Хуаншань, Фэнхуан)
+.claude/skills/         скиллы: vizavi-motion, location, explain
 .claude/agents/         субагенты: chinese-checker
 characters/rita/         SVG персонажа по слоям
+locations/               места маршрута, по файлу на место; список — list.js
+videos/catalog/          каталог мест и выбор маршрута (через локальный сервер)
 videos/<ролик>/          сцены и таймлайн ролика
 shared/                  общий код: таймлайн, фильтры туши и акварели, rig.js
 render/                  рендер кадров и сборка MP4
@@ -114,7 +118,8 @@ out/                     кадры и MP4 (не в git)
 
 - Проектные правила находятся в этом `CLAUDE.md`; процедуры для отдельных задач — в
   `.claude/skills/`. Скилл `vizavi-motion` используй для создания и доработки
-  роликов, `explain` — для объяснений по запросу владельца.
+  роликов, `location` — для новых мест маршрута (`locations/`), `explain` — для
+  объяснений по запросу владельца.
 - Субагенты описываются Markdown-файлами в `.claude/agents/`.
   Для изменения китайского текста запускай `chinese-checker` как отдельную
   проверку; он только сообщает о находках и не редактирует файлы.
