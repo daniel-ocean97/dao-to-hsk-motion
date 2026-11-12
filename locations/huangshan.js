@@ -252,7 +252,7 @@
 
     // ---------- the pine ----------
 
-    // Huangshan pine (the welcoming pine, 迎客松 Yíngkèsōng): a stout trunk, a flat crown
+    // Huangshan pine (the welcoming pine, Yingkesong): a stout trunk, a flat crown
     // and flat pads of needles on level boughs; two long lower boughs reach out to one
     // side. Painted in parts on canvases of one size, so the long boughs can sway around
     // the points where they leave the trunk.
@@ -412,7 +412,8 @@
     begin('mid', 0.5);
     granite({ cols: midCols, ridge: mid, base: HZ + 110, tone: '#a9a29c', deep: '#5b534e', light: '#ece6de', fadeFrom: HZ - 200, fadeTo: HZ + 120, seed: 54, pines: 0.42 });
     begin('near', 1);
-    cliff([[-240, 1190], [-240, 180], [-150, 150], [-60, 175], [-20, 262], [40, 290], [70, 400], [130, 430], [165, 540], [250, 578], [330, 602], [400, 614], [470, 620], [505, 652], [520, 740], [560, 790], [575, 900], [640, 960], [680, 1190]], 12, 56);
+    const CLIFF = [[-240, 1190], [-240, 180], [-150, 150], [-60, 175], [-20, 262], [40, 290], [70, 400], [130, 430], [165, 540], [250, 578], [330, 602], [400, 614], [470, 620], [505, 652], [520, 740], [560, 790], [575, 900], [640, 960], [680, 1190]];
+    cliff(CLIFF, 12, 56);
     D.pine(ctx, -90, 168, 86, { seed: 58, color: '#232a25', alpha: 0.8 });
     D.pine(ctx, 22, 284, 64, { seed: 59, color: '#232a25', alpha: 0.8 });
     const PINE = makePine(470, 1, 57);
@@ -448,7 +449,22 @@
       drawPine(PINE, cam, 400, 620, t);
       bank(SEA[4], cam, 1.3, 985 + swell(4), -420 - t * 52);
     }
-    return { frame, ridge: { pts: mid, p: 0.5 } };
+    // The crest for the cuts: the near cliff on the left, the main row of columns on the
+    // right, the top of the cloud sea between them (not the feet of the rocks under the
+    // clouds). The cliff stands at depth 1 and the crest lives at depth 0.5, so its points
+    // are shifted to where the camera sees them at the end of the scene.
+    const end = camera(k.DURATION), z1 = 1 + (end.zoom - 1), z5 = 1 + (end.zoom - 1) * 0.5;
+    const toMid = ([x, y]) => [960 + end.x * 0.5 + (z1 / z5) * (x - 960 - end.x), 540 + end.y * 0.5 + (z1 / z5) * (y - 540 - end.y)];
+    const edge = densify(CLIFF, 6).filter(([x, y]) => x > -238 && y < HZ + 12).map(toMid);
+    const crestLine = [];
+    for (let x = -240; x <= 2160; x += 6) {
+      let y = HZ + 10 + 6 * Math.sin(x / 90);
+      const m = mid[Math.round((x + 240) / 3)];
+      if (m) y = Math.min(y, m[1]);
+      for (const [ex, ey] of edge) if (Math.abs(ex - x) < 6) y = Math.min(y, ey);
+      crestLine.push([x, y]);
+    }
+    return { frame, ridge: { pts: crestLine, p: 0.5 } };
   }
 
   DH.location.define('huangshan', {
