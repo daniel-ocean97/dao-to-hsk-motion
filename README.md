@@ -10,7 +10,7 @@
 
 | Ролик | Статус | План |
 |---|---|---|
-| `intro-01` — интро к урокам, ~18 с, 16:9 | планирование | [docs/intro-01-plan.md](docs/intro-01-plan.md) |
+| `intro-01` — интро к урокам, 26,4 с, 16:9 | MP4 просмотрен | [docs/intro-01-plan.md](docs/intro-01-plan.md) · [раскадровка](docs/intro-01-storyboard.md) |
 
 ## Как устроено
 
@@ -34,7 +34,41 @@ shared/              общий код: таймлайн, фильтры туш�
 render/              скрипт покадрового рендера и сборки MP4
 music/               музыка и звуки с указанием лицензии
 out/                 кадры и готовые MP4 (в git не попадают)
-.claude/             скилл vizavi-motion, агент chinese-checker
+.claude/skills/      скиллы Claude Code: vizavi-motion и explain
+.claude/agents/      субагент Claude Code: chinese-checker
+```
+
+## Первоначальная настройка
+
+Установи [uv](https://docs.astral.sh/uv/) и FFmpeg. Затем из корня проекта:
+
+```bash
+uv sync                            # Python и библиотека Playwright
+uv run playwright install chromium # браузер для покадрового рендера
+```
+
+Chromium устанавливается отдельно: `uv sync` ставит только Python-зависимости,
+а браузер является отдельной программой. Эти две команды нужны один раз на новом
+компьютере или после обновления версии Playwright.
+
+Проверка рендера без звука:
+
+```bash
+uv run render/render.py videos/intro-01/index.html
+```
+
+Готовый файл появится в `out/intro-01/intro-01.mp4`. Чтобы добавить музыку:
+
+```bash
+uv run render/render.py videos/intro-01/index.html --audio music/local/track.mp3
+```
+
+Подставь реальное имя аудиофайла. Необязательные параметры: `--audio-start N`
+начинает трек с N-й секунды, `--audio-fade N` плавно затихает звук за последние
+N секунд ролика. Для проверки отдельных моментов без полного рендера:
+
+```bash
+uv run render/render.py videos/intro-01/index.html --stills 18.0 22.4 24.3
 ```
 
 ## Как посмотреть сцену

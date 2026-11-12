@@ -64,6 +64,14 @@
     L.mistLow = { c: W.mistBand({ w: w + 800, h: 130, color: PAL.mist, seed: 17 }), ox: ox - 400, oy: 640, p: 0.8, speed: -14 };
     L.rock = W.rock({ y: 1012, ...rock });
     L.pine = W.pineBranch({ x: -160, y: -60, scale: 1.2, seed: 5, blur: 4 });
+    // quiet life (shared/details.js): far birds, rings on the water, reeds by the rock
+    const D = DH.details;
+    L.flock = D.flock({ n: 5, seed: 71, spread: [70, 24], size: 8 });
+    L.rings = D.ringSites({ n: 6, seed: 72, x: [200, 1900], y: [HORIZON + 50, HORIZON + 290], period: [3.6, 5.6] });
+    L.reeds = [
+      ...D.reeds({ x: rock.x - rock.w / 2 - 70, y: 1090, n: 9, spread: 70, seed: 73 }),
+      ...D.reeds({ x: rock.x + rock.w / 2 + 90, y: 1095, n: 7, spread: 55, h: [90, 180], seed: 74 }),
+    ];
     L.pal = PAL;
     return L;
   }
@@ -152,7 +160,10 @@
 
   // Draw the place for camera cam at time t (mist drifts; the reflection ripples).
   // sunY: how far below its painted place the sun is (it rises in the finale).
-  function draw(ctx, L, cam, t, sunY = 0) {
+  // o.wind: how hard the reeds are blown (1: a steady breeze); o.birds: [x, y] of the far
+  // flock in world coords at depth 0.3, if it is in the sky now.
+  function draw(ctx, L, cam, t, sunY = 0, o = {}) {
+    const D = DH.details;
     const PAL = L.pal;
     // start from the low sky colour, as probe-landscape: the sky does not reach the bottom
     // of the frame, and where the water and the rock are thin the last frame showed through
@@ -172,6 +183,10 @@
     }
     place(ctx, L.far.c, L.far.ox, L.far.oy, cam, L.far.p);
     if (L.sun) rimLight(ctx, L, cam, sunY);
+    if (o.birds) {
+      view(ctx, cam, 0.3);
+      D.birds(ctx, L.flock, o.birds[0], o.birds[1], t, { alpha: 0.45 });
+    }
     // mist drifts slowly; no wrap-around: the bands are 1700 px wider than the frame and in
     // 20 s they move at most ~280 px (a modulo made the band jump when t changed sign)
     { const m = L.mistFar; place(ctx, m.c, m.ox + t * m.speed, m.oy, cam, m.p); }
@@ -184,8 +199,12 @@
       ctx.setTransform(z, 0, 0, z, 960 + z * (R.ox + dx - 960 - cam.x * R.p), 540 + z * (R.oy + y - 540 - cam.y * R.p));
       ctx.drawImage(R.c, 0, y, R.c.width, 4, 0, 0, R.c.width, 4);
     }
+    view(ctx, cam, 0.8);
+    D.rings(ctx, L.rings, t, { size: 46, color: PAL.mid[1], alpha: 0.28 });
     { const m = L.mistLow; place(ctx, m.c, m.ox + t * m.speed, m.oy, cam, m.p); }
     place(ctx, L.rock.canvas, L.rock.ox, L.rock.oy, cam, 1);
+    view(ctx, cam, 1);
+    D.drawReeds(ctx, L.reeds, t, { wind: o.wind ?? 1, color: PAL.mid[1] });
     ctx.setTransform(1, 0, 0, 1, 0, 0);
   }
 

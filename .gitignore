@@ -20,7 +20,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Claude Code personal settings
+# Claude Code personal settings (keep project instructions, skills and agents tracked)
 .claude/settings.local.json
 .claude/launch.json
 

@@ -8,13 +8,14 @@ there is no licence to check):
           little high whistle of air) that settles in ~2 s; then steady to the end
   petals  each petal is one flight heard two ways at once: a soft swish of air (noise
           through a band-pass gliding down) and the flutter of silk (noise trembling in
-          loudness); the faster the air glides, the faster the silk trembles. While
-          petals fly: the gust (3.1-5.2 s) and the lights flying home (15.5-17.9 s)
+          loudness); the faster the air glides, the faster the silk trembles. The score
+          follows the gust (3.1-5.2 s), the petals scattering (15.4-19.1 s), and their
+          slow approach to the halo (19.1-26.2 s, quieter and less frequent).
 The music: the track from --music-start, faded in over --music-fade-in (the video opens
 on a drop of ink), faded out over the last --music-fade-out seconds (the track is cut
 where its own ending has almost died away).
 
-    uv run render/sound.py music/local/by-the-quiet-water-30s.mp3 --music-start 3.88
+    uv run render/sound.py music/local/kaazoom-By-The-Quiet-Water-30-sec-edit-Traditional-Chinese-Style-Music.mp3 --music-start 3.90
     uv run render/render.py videos/intro-01/index.html --reuse-frames --audio out/intro-01/mix.wav
 """
 
@@ -30,9 +31,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 RATE = 48000
-LENGTH = 24.4  # the video, s (videos/intro-01/index.html)
+LENGTH = 26.4  # the video, s (videos/intro-01/index.html)
 WIND_FROM = 3.0
-PETALS = [(3.1, 5.2), (15.5, 17.9)]  # when petals fly in the frame, s
+PETALS = [
+    (3.1, 5.2, 3.5, 1.0),   # the first gust carries a small burst of petals
+    (15.4, 19.1, 3.0, 0.75),  # petals detach from the returning light trails and scatter
+    (19.1, 26.2, 1.1, 0.32),  # sparse, softer rustles as they drift towards the open halo
+]  # start, end, swishes per second, relative level
 
 
 def ffmpeg() -> str:
@@ -100,11 +105,11 @@ def petals(path: Path) -> None:
     rnd = random.Random(3)
     n = int(RATE * LENGTH)
     left, right = [0.0] * n, [0.0] * n
-    for t0, t1 in PETALS:
+    for t0, t1, rate, level in PETALS:
         t = t0
         while t < t1:
-            t += rnd.expovariate(3.5)
-            fade = min(1, (t - t0) / 0.3, max(0, t1 - t) / 0.4)
+            t += rnd.expovariate(rate)
+            fade = level * min(1, (t - t0) / 0.3, max(0, t1 - t) / 0.4)
             dur = rnd.uniform(0.45, 0.85)
             f0 = rnd.uniform(2200, 3200)
             f1 = f0 * rnd.uniform(0.4, 0.6)
