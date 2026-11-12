@@ -45,24 +45,24 @@ def ensure_mix() -> Path:
     return MIX
 
 
-def contact_sheet(images: list[Path], labels: list[float], out: Path) -> None:
-    """A 3-column sheet of the images, 640 px wide each, with its time written on it.
+def contact_sheet(images: list[Path], labels: list[str], out: Path, cols: int = 3) -> None:
+    """A sheet in `cols` columns of the images, 640 px wide each, with its label written on it.
     Laid out as a page in the browser (this FFmpeg has no text filter)."""
     ffmpeg = find_tool("ffmpeg")
     cells = []
-    for img, t in zip(images, labels):
+    for img, label in zip(images, labels):
         small = subprocess.run([ffmpeg, "-loglevel", "error", "-i", str(img), "-vf", "scale=640:-1",
                                 "-f", "image2pipe", "-c:v", "mjpeg", "-q:v", "3", "-"],
                                check=True, capture_output=True).stdout
         cells.append(f'<figure><img src="data:image/jpeg;base64,{base64.b64encode(small).decode()}">'
-                     f"<figcaption>{t:.2f} s</figcaption></figure>")
-    html = ("<style>body{margin:0;background:#141414}main{display:grid;grid-template-columns:repeat(3,640px);gap:4px}"
+                     f"<figcaption>{label}</figcaption></figure>")
+    html = (f"<style>body{{margin:0;background:#141414}}main{{display:grid;grid-template-columns:repeat({cols},640px);gap:4px}}"
             "figure{margin:0;position:relative}img{display:block;width:640px}"
             "figcaption{position:absolute;left:8px;top:8px;padding:2px 8px;background:#000a;color:#fff;"
             "font:20px sans-serif}</style><main>" + "".join(cells) + "</main>")
     with sync_playwright() as p:
         browser = launch(p)
-        page = browser.new_page(viewport={"width": 3 * 640 + 8, "height": 400}, device_scale_factor=1)
+        page = browser.new_page(viewport={"width": cols * 644, "height": 400}, device_scale_factor=1)
         page.set_content(html)
         page.screenshot(path=str(out), full_page=True)
         browser.close()
@@ -108,7 +108,7 @@ def main() -> None:
 
     if args.seams_only:
         stills = render_frames(INTRO, out_dir / "seams", FPS, SEAMS, query)
-        contact_sheet(stills, SEAMS, out_dir / "seams.png")
+        contact_sheet(stills, [f"{t:.2f} s" for t in SEAMS], out_dir / "seams.png")
         print(f"seams -> {out_dir / 'seams.png'}")
         return
 
@@ -120,7 +120,7 @@ def main() -> None:
     mp4 = out_dir / f"{name}.mp4"
     assemble(frames_dir, FPS, mp4, mix)
     seams = [frames_dir / f"{round(t * FPS):05d}.png" for t in SEAMS]
-    contact_sheet(seams, SEAMS, out_dir / "seams.png")
+    contact_sheet(seams, [f"{t:.2f} s" for t in SEAMS], out_dir / "seams.png")
     problems = probe(mp4)
     print(f"video -> {mp4}\nseams -> {out_dir / 'seams.png'}")
     if problems:

@@ -11,9 +11,11 @@
 //
 // DH.location.load(ids) loads the files locations/<id>.js that are not loaded yet; the list
 // of all ids is locations/list.js (DH.LOCATIONS).
-// DH.location.make(id, { duration }) paints the place once (painting takes a while) and
+// DH.location.make(id, { duration, variant }) paints the place once (painting takes a while) and
 // resolves to { id, def, DURATION, frame(dst, t), silhouette(t) }. Every location is laid
-// out for 2.5 s of animation; duration stretches all of it, the caption included.
+// out for 2.5 s of animation; duration stretches all of it, the caption included. variant
+// (k.variant) is for sketches: one draft file can paint several compositions
+// (?variant= on the probe page, render/sketch_sheet.py).
 (function (g) {
   const DH = g.DH;
   const LEN = 2.5; // the animation length every location is laid out for, s
@@ -44,7 +46,7 @@
     REGISTRY[id] = { id, ...def };
   }
 
-  async function make(id, { duration = LEN } = {}) {
+  async function make(id, { duration = LEN, variant = null } = {}) {
     const def = REGISTRY[id];
     if (!def) throw new Error(`unknown location "${id}" (is locations/${id}.js loaded?)`);
     const W = DH.wc;
@@ -114,6 +116,17 @@
       ctx.globalAlpha = 1;
     }
 
+    // Split long edges into short ones: wash() roughens an edge in proportion to its length,
+    // so a long side would otherwise spill a wide pale halo (docs: skill location, craft.md).
+    function densify(poly, step = 14) {
+      const pts = [];
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length], n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+        for (let j = 0; j < n; j++) pts.push([a[0] + (b[0] - a[0]) * j / n, a[1] + (b[1] - a[1]) * j / n]);
+      }
+      return pts;
+    }
+
     // The top edge of what is painted on a layer: for every 8th column, the first row with
     // solid paint (world coords). Columns with nothing painted go to the bottom.
     function skylineOf(name) {
@@ -141,9 +154,9 @@
     }
 
     const kit = {
-      W, D: DH.details, out, LX, LY, LW, LH, LAYERS, DURATION: LEN,
+      W, D: DH.details, out, LX, LY, LW, LH, LAYERS, DURATION: LEN, variant,
       INK: '#24170f', INK2: '#3e3a36',
-      begin, place, view, show, masked, smooth, sky, range, mist, skylineOf, caption,
+      begin, place, view, show, masked, smooth, sky, range, mist, densify, skylineOf, caption,
       camera: def.camera,
     };
     const scene = def.setup(kit);

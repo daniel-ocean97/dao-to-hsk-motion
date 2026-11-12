@@ -20,13 +20,15 @@
 <script src="../../shared/preview.js"></script>
 <script src="../../shared/location.js"></script>
 <script>
-// Probe of one place from the library (locations/*.js), 2.5 s: ?place=wall|guilin|shanghai. Painting the layers takes a while before the first frame.
+// Probe of one place from the library (locations/*.js), 2.5 s: ?place=wall|guilin|shanghai,
+// &variant=N for a sketch variant (k.variant). Painting the layers takes a while before the first frame.
 const DURATION = 2.5;
 const out = document.getElementById('out').getContext('2d');
 (async () => {
-  const place = new URLSearchParams(location.search).get('place') || 'wall';
+  const params = new URLSearchParams(location.search);
+  const place = params.get('place') || 'wall';
   await DH.location.load([place]);
-  const scene = await DH.location.make(place);
+  const scene = await DH.location.make(place, { variant: params.get('variant') });
   document.getElementById('paper').getContext('2d').drawImage(DH.wc.paperSheet(1920, 1080), 0, 0);
   const renderAt = (t) => scene.frame(out, t);
   window.DURATION = DURATION;
