@@ -50,11 +50,14 @@
 
 1. Раскадровка по скиллу `vizavi-motion`: 3–5 вариантов, выбор, проба риска.
 2. Скопировать похожее место (`wall.js`, `guilin.js` для дня, `shanghai.js` для ночи)
-   в `locations/<id>.js`, поменять `id`, `name`, `time`, `caption` и рисование.
-3. Подключить файл на пробной странице `videos/probe-places/index.html` и
-   посмотреть: `videos/probe-places/?place=<id>`.
-4. Проверить подпись агентом `chinese-checker`.
-5. Добавить строку в таблицу ниже.
+   в `locations/<id>.js`, поменять `id`, `name`, `time`, `caption`, паспорт и рисование.
+3. Вписать `id` в список `locations/list.js`. Больше ничего подключать не нужно:
+   ролик, проба и каталог загружают файлы мест сами.
+4. Если в подписи новые иероглифы — `uv run render/subset_fonts.py` (добавит их
+   в шрифт `fonts/NotoSerifSC-subset.ttf`) и закоммитить новый шрифт.
+5. Посмотреть место: `videos/probe-places/?place=<id>` и в каталоге.
+6. Проверить подпись агентом `chinese-checker`.
+7. Добавить строку в таблицу ниже.
 
 ## Места
 
@@ -64,19 +67,35 @@
 | `guilin` | Гуйлинь, река Лицзян | 桂林 Guìlín | день | `locations/guilin.js` |
 | `shanghai` | Шанхай, Пудун ночью | 上海 Shànghǎi | ночь | `locations/shanghai.js` |
 
-## Маршрут
+## Каталог и сборка
 
-Маршрут задаётся в адресе страницы: `videos/intro-01/index.html?route=guilin,wall,shanghai`
-(без `route` — `wall,guilin,shanghai`). Рендер:
+Страницы открываются через локальный сервер: в приложении Claude — сервер
+`motion` (локальный `.claude/launch.json`, не в git), в терминале — `uv run python -m http.server 8000`.
+
+- **Каталог:** http://localhost:8000/videos/catalog/ — все места с картинками,
+  выбор маршрута по слотам (в списках только подходящие места), кнопки «Открыть
+  ролик», «Стык 1→2», «Стык 2→3» и готовая команда сборки.
+- **Ролик с маршрутом:** http://localhost:8000/videos/intro-01/?route=guilin,wall,shanghai
+  (без `route` — `wall,guilin,shanghai`; `&t=9.2` открывает на этой секунде).
+- **Сборка одной командой** (около 10 минут):
 
 ```bash
-uv run render/render.py videos/intro-01/index.html --query route=guilin,wall,shanghai --name route-gws --audio out/intro-01/mix.wav
+uv run render/build_intro.py --route guilin,wall,shanghai
 ```
 
-Страница проверяет маршрут и пишет ошибку прямо в кадре: если мест не три,
-если файла места нет на странице, если ночное место стоит в дневном слоте
-(или наоборот). Новое место нужно подключить строкой `<script>` в
-`videos/intro-01/index.html`.
+  Делает звук (один раз, общий для всех маршрутов), кадры, MP4, проверку
+  `ffprobe` и лист стыков `out/route-<ids>/seams.png` — 12 кадров вокруг всех
+  переходов. Быстрая проверка без MP4 (около 30 секунд):
+
+```bash
+uv run render/build_intro.py --route guilin,wall,shanghai --seams-only
+```
+
+Страница ролика проверяет маршрут и пишет ошибку прямо в кадре: если мест
+не три, если места нет в `locations/`, если ночное место стоит в дневном
+слоте (или наоборот).
+
+## Переходы
 
 Переходы общие для любых мест:
 
@@ -87,7 +106,4 @@ uv run render/render.py videos/intro-01/index.html --query route=guilin,wall,sha
   вытягивается и становится силуэтом ночного места;
 - слот 3 → финал: камера разворачивается к озеру, огни `night.lights` летят к Рите.
 
-## Что ещё не сделано
-
-1. Каталог мест на одной странице и сборка ролика одной командой.
-2. Новые места.
+Место в слоте 2 идёт 3 секунды, а в слоте 1 — 4,5: анимация растягивается.

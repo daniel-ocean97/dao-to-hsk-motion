@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Каталог мест</title>
+<style>
+  :root { --paper: #f5f2ec; --paper-2: #ece6dc; --ink: #141414; --ink-2: #3e3a36; --muted: #6b6660; --line: #d6d0c6; --wine: #7b1e2b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 "DH Onest", system-ui, sans-serif; }
+  main { max-width: 1240px; margin: 0 auto; padding: 28px 20px 60px; }
+  h1 { font: 600 34px/1.1 "DH Cormorant Garamond", serif; margin: 0 0 4px; }
+  h2 { font: 600 24px/1.2 "DH Cormorant Garamond", serif; margin: 30px 0 12px; }
+  .lead { color: var(--muted); margin: 0 0 18px; }
+  .route { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .slot { background: var(--paper-2); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+  .slot b { display: block; font-weight: 600; }
+  .slot small { color: var(--muted); display: block; margin-bottom: 8px; }
+  .slot canvas { width: 100%; aspect-ratio: 16 / 9; display: block; border-radius: 3px; background: var(--line); margin-bottom: 8px; }
+  select { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--paper); }
+  .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 14px; }
+  .btn { background: var(--wine); color: var(--paper); border: 0; border-radius: 4px; padding: 9px 16px; font: inherit; text-decoration: none; cursor: pointer; }
+  code { background: var(--paper-2); border: 1px solid var(--line); border-radius: 4px; padding: 7px 10px; font: 13px/1.3 ui-monospace, monospace; user-select: all; overflow-wrap: anywhere; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+  .card { border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #fff8; }
+  .card canvas { width: 100%; aspect-ratio: 16 / 9; display: block; background: var(--line); }
+  .card .info { padding: 10px 12px 12px; }
+  .card .hz { font: 500 22px/1 "DH Noto Serif SC", serif; margin-right: 6px; }
+  .card .py { color: var(--ink-2); }
+  .card .meta { color: var(--muted); font-size: 13px; margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .card a { color: var(--wine); }
+  .tag { border-radius: 3px; padding: 0 6px; background: var(--paper-2); }
+  .tag.night { background: #3b4560; color: var(--paper); }
+  #status { color: var(--muted); }
+  pre.err { color: var(--wine); white-space: pre-wrap; }
+  @media (max-width: 720px) { .route { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Каталог мест</h1>
+  <p class="lead">Места из <code>locations/</code> для интро. Слоты 1–2 дневные, слот 3 ночной
+    (docs/locations.md). <span id="status">Рисую места…</span></p>
+
+  <h2>Маршрут</h2>
+  <div class="route" id="route"></div>
+  <div class="actions">
+    <a class="btn" id="open" target="_blank">Открыть ролик</a>
+    <a class="btn" id="seams" target="_blank">Стык 1→2</a>
+    <a class="btn" id="night" target="_blank">Стык 2→3</a>
+  </div>
+  <p>Собрать MP4 одной командой (из папки проекта):</p>
+  <code id="cmd"></code>
+
+  <h2>Все места</h2>
+  <div class="grid" id="grid"></div>
+</main>
+
+<script src="../../shared/timeline.js"></script>
+<script src="../../shared/watercolor.js"></script>
+<script src="../../shared/details.js"></script>
+<script src="../../shared/caption.js"></script>
+<script src="../../shared/location.js"></script>
+<script>
+// The catalog of places (locations/list.js): a thumbnail of each, and a route picker that
+// opens the intro with that route and prints the build command.
+const SNAP = 1.6; // the moment of the thumbnail, animation time (0..2.5 s)
+const TIME = { day: 'день', night: 'ночь' };
+const $ = (id) => document.getElementById(id);
+const paper = DH.wc.paperSheet(1920, 1080);
+const SHOTS = {}; // id -> full-size frame
+
+function thumb(canvas, id) {
+  const c = canvas.getContext('2d');
+  c.drawImage(SHOTS[id], 0, 0, canvas.width, canvas.height);
+  c.globalCompositeOperation = 'multiply';
+  c.drawImage(paper, 0, 0, canvas.width, canvas.height);
+  c.globalCompositeOperation = 'source-over';
+}
+
+function card(def) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  const cap = def.caption || {};
+  el.innerHTML = `<canvas width="640" height="360"></canvas><div class="info">
+    <div><span class="hz">${cap.hanzi || ''}</span><span class="py">${cap.pinyin || ''}</span></div>
+    <div>${def.name}</div>
+    <div class="meta"><span class="tag ${def.time}">${TIME[def.time] || def.time}</span>
+      <span>id: <b>${def.id}</b></span>
+      <a href="../probe-places/?place=${def.id}" target="_blank">проба</a></div></div>`;
+  $('grid').appendChild(el);
+  return el.querySelector('canvas');
+}
+
+function routePicker(defs) {
+  const day = defs.filter((d) => d.time === 'day'), night = defs.filter((d) => d.time === 'night');
+  const params = new URLSearchParams(location.search);
+  const start = (params.get('route') || 'wall,guilin,shanghai').split(',');
+  const slots = [
+    { title: 'Слот 1', note: 'день, 5,0–9,5 с', pool: day },
+    { title: 'Слот 2', note: 'день → ночь, 9,5–12,5 с', pool: day },
+    { title: 'Слот 3', note: 'ночь с огнями, 12,5–15,5 с', pool: night },
+  ];
+  const selects = slots.map((s, i) => {
+    const box = document.createElement('div');
+    box.className = 'slot';
+    box.innerHTML = `<b>${s.title}</b><small>${s.note}</small><canvas width="480" height="270"></canvas><select></select>`;
+    const sel = box.querySelector('select');
+    for (const d of s.pool) sel.add(new Option(`${d.name} (${d.id})`, d.id));
+    if (s.pool.some((d) => d.id === start[i])) sel.value = start[i];
+    sel.onchange = update;
+    $('route').appendChild(box);
+    return sel;
+  });
+  function update() {
+    const ids = selects.map((s) => s.value);
+    const route = ids.join(',');
+    selects.forEach((s, i) => thumb(s.parentElement.querySelector('canvas'), s.value));
+    const intro = `../intro-01/index.html?route=${route}`;
+    $('open').href = intro;
+    $('seams').href = `${intro}&t=9.2`;
+    $('night').href = `${intro}&t=12.2`;
+    $('cmd').textContent = `uv run render/build_intro.py --route ${route}`;
+    history.replaceState(null, '', `?route=${route}`);
+    if (new Set(ids).size < 3) $('cmd').textContent += '   (одно место дважды)';
+  }
+  update();
+}
+
+(async () => {
+  const defs = await DH.location.load();
+  // paint the places one by one, so the page stays alive and shows its progress
+  for (const [i, def] of defs.entries()) {
+    $('status').textContent = `Рисую места… ${i + 1} из ${defs.length}`;
+    await new Promise((r) => setTimeout(r, 0));
+    const scene = await DH.location.make(def.id);
+    const shot = DH.wc.canvas(1920, 1080);
+    scene.frame(shot.getContext('2d'), SNAP);
+    SHOTS[def.id] = shot;
+    thumb(card(def), def.id);
+  }
+  routePicker(defs);
+  $('status').textContent = `Мест: ${defs.length}.`;
+  window.catalogReady = true;
+})().catch((e) => {
+  $('status').innerHTML = `<pre class="err">${e.stack}</pre>`;
+  throw e;
+});
+</script>
+</body>
+</html>

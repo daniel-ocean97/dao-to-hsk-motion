@@ -9,6 +9,8 @@
 //             { frame(t), ridge }: frame draws animation time t into k.out; ridge is
 //             { pts, p }, the main crest line in world coords at depth p (for the cuts)
 //
+// DH.location.load(ids) loads the files locations/<id>.js that are not loaded yet; the list
+// of all ids is locations/list.js (DH.LOCATIONS).
 // DH.location.make(id, { duration }) paints the place once (painting takes a while) and
 // resolves to { id, def, DURATION, frame(dst, t), silhouette(t) }. Every location is laid
 // out for 2.5 s of animation; duration stretches all of it, the caption included.
@@ -16,6 +18,27 @@
   const DH = g.DH;
   const LEN = 2.5; // the animation length every location is laid out for, s
   const REGISTRY = {};
+  const BASE = new URL('../locations/', document.currentScript.src);
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error(`no file ${src}`));
+      document.head.appendChild(s);
+    });
+  }
+  // Load the location files of these ids (the list itself when ids is omitted).
+  async function load(ids) {
+    if (!ids) {
+      if (!DH.LOCATIONS) await loadScript(new URL('list.js', BASE));
+      ids = DH.LOCATIONS;
+    }
+    await Promise.all(ids.filter((id) => !REGISTRY[id]).map((id) => loadScript(new URL(`${id}.js`, BASE))));
+    for (const id of ids) if (!REGISTRY[id]) throw new Error(`locations/${id}.js did not define "${id}"`);
+    return ids.map((id) => REGISTRY[id]);
+  }
 
   function define(id, def) {
     REGISTRY[id] = { id, ...def };
@@ -171,5 +194,5 @@
     };
   }
 
-  DH.location = { LEN, define, make, glide, all: () => Object.values(REGISTRY), get: (id) => REGISTRY[id] };
+  DH.location = { LEN, define, load, make, glide, all: () => Object.values(REGISTRY), get: (id) => REGISTRY[id] };
 })(window);

@@ -24,9 +24,6 @@
 <script src="scenes/lake.js"></script>
 <script src="scenes/prologue.js"></script>
 <script src="../../shared/location.js"></script>
-<script src="../../locations/wall.js"></script>
-<script src="../../locations/guilin.js"></script>
-<script src="../../locations/shanghai.js"></script>
 <script src="scenes/dawn.js"></script>
 <script>
 // intro-01, draft assembly (docs/intro-01-storyboard.md), 26.4 s, timed to the music
@@ -62,11 +59,13 @@ const S1 = 5.0, S2 = 9.5, S3 = 12.5, DAWN = 15.5, DURATION = 26.4;
 const FINALE = { start: DAWN, crane: 18.0, dao: 19.14, turn: 20.5, title: 22.34, end: 24.4 };
 // The route: three location ids. Slots 1-2 need day places, slot 3 a night one.
 const ROUTE = (new URLSearchParams(location.search).get('route') || 'wall,guilin,shanghai').split(',');
-function checkRoute(ids) {
+async function checkRoute(ids) {
   if (ids.length !== 3) throw new Error(`route needs 3 places, got ${ids.length}: ${ids}`);
+  try { await DH.location.load(ids); } catch (e) {
+    throw new Error(`route ${ids}: ${e.message} (the places: locations/list.js)`);
+  }
   ids.forEach((id, i) => {
     const def = DH.location.get(id), want = i < 2 ? 'day' : 'night';
-    if (!def) throw new Error(`unknown place "${id}": add its <script src="../../locations/${id}.js"> to this page`);
     if (def.time !== want) throw new Error(`slot ${i + 1} needs a ${want} place, "${id}" is ${def.time}`);
   });
 }
@@ -311,7 +310,7 @@ function renderAt(t) {
 }
 
 (async () => {
-  checkRoute(ROUTE);
+  await checkRoute(ROUTE);
   [prologue, s1, s2, s3, dawn] = await Promise.all([
     SCENES.prologue({ wipe: false }),
     DH.location.make(ROUTE[0], { duration: S2 - S1 }),

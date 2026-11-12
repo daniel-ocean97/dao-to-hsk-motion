@@ -82,7 +82,8 @@ docs/locations.md        библиотека мест: слоты день/но
 .claude/skills/         скиллы: vizavi-motion, explain
 .claude/agents/         субагенты: chinese-checker
 characters/rita/         SVG персонажа по слоям
-locations/               места маршрута, по файлу на место (shared/location.js)
+locations/               места маршрута, по файлу на место; список — list.js
+videos/catalog/          каталог мест и выбор маршрута (через локальный сервер)
 videos/<ролик>/          сцены и таймлайн ролика
 shared/                  общий код: таймлайн, фильтры туши и акварели, rig.js
 render/                  рендер кадров и сборка MP4
