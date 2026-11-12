@@ -18,15 +18,17 @@
 <script src="../../shared/details.js"></script>
 <script src="../../shared/caption.js"></script>
 <script src="../../shared/preview.js"></script>
-<script src="../intro-01/scenes/places.js"></script>
+<script src="../../shared/location.js"></script>
+<script src="../../locations/wall.js"></script>
+<script src="../../locations/guilin.js"></script>
+<script src="../../locations/shanghai.js"></script>
 <script>
-// Probe of the three places (videos/intro-01/scenes/places.js), 2.5 s each:
-// ?place=wall|guilin|shanghai. Painting the layers takes a while before the first frame.
+// Probe of one place from the library (locations/*.js), 2.5 s: ?place=wall|guilin|shanghai. Painting the layers takes a while before the first frame.
 const DURATION = 2.5;
 const out = document.getElementById('out').getContext('2d');
 (async () => {
   const place = new URLSearchParams(location.search).get('place') || 'wall';
-  const scene = await SCENES.place(place);
+  const scene = await DH.location.make(place);
   document.getElementById('paper').getContext('2d').drawImage(DH.wc.paperSheet(1920, 1080), 0, 0);
   const renderAt = (t) => scene.frame(out, t);
   window.DURATION = DURATION;

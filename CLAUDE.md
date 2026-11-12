@@ -78,9 +78,11 @@ docs/brand.md            палитра и шрифты бренда для ро
 docs/character-rita.md   описание персонажа (вместо фото)
 docs/rita-generation.md  как получить иллюстрацию Риты в генераторе
 docs/intro-01-plan.md    план первого ролика
+docs/locations.md        библиотека мест: слоты день/ночь, паспорт локации
 .claude/skills/         скиллы: vizavi-motion, explain
 .claude/agents/         субагенты: chinese-checker
 characters/rita/         SVG персонажа по слоям
+locations/               места маршрута, по файлу на место (shared/location.js)
 videos/<ролик>/          сцены и таймлайн ролика
 shared/                  общий код: таймлайн, фильтры туши и акварели, rig.js
 render/                  рендер кадров и сборка MP4

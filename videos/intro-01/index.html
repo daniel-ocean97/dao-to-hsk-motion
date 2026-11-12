@@ -23,7 +23,10 @@
 <script src="../../characters/rita/rig-art.js"></script>
 <script src="scenes/lake.js"></script>
 <script src="scenes/prologue.js"></script>
-<script src="scenes/places.js"></script>
+<script src="../../shared/location.js"></script>
+<script src="../../locations/wall.js"></script>
+<script src="../../locations/guilin.js"></script>
+<script src="../../locations/shanghai.js"></script>
 <script src="scenes/dawn.js"></script>
 <script>
 // intro-01, draft assembly (docs/intro-01-storyboard.md), 26.4 s, timed to the music
@@ -32,7 +35,7 @@
 //   0.0-5.0   scenes 1-2, prologue and gust (scenes/prologue.js)
 //   4.6-5.4   a sheet of paper passes through the frame from right to left: its front edge
 //             covers the gust, its back edge uncovers the wall
-//   5.0-9.5   scene 3, the Great Wall (scenes/places.js), slower than the others
+//   5.0-9.5   scene 3, the Great Wall (locations/wall.js), slower than the others
 //   9.0-10.3  mist rises over the wall, its ridge stays as an ink silhouette that turns
 //             into the karst peaks of Guilin, the mist clears
 //   9.5-12.5  scene 4, Guilin
@@ -139,7 +142,7 @@ function ridgeMorph(ctx, t) {
 // Night falls over Guilin: the sky above the line of the peaks floods with the night sky of
 // Shanghai, the peaks below it turn to dark ink and stretch up; the line then becomes the
 // Pudong skyline; under the full flood the scenes swap, then the flood ebbs and the line is
-// the city. NIGHT: the Shanghai sky (scenes/places.js), INKB: the body of the silhouette.
+// the city. NIGHT: the Shanghai sky (locations/shanghai.js), INKB: the body of the silhouette.
 const NIGHT = ['#3b4560', '#8c8597'], INKB = '#262b3a';
 const nightK = (t) => ease.draw(progress(t, SHANGHAI - 0.4, SHANGHAI + 0.1)) * (1 - ease.draw(progress(t, SHANGHAI + 0.4, SHANGHAI + 0.95)));
 
@@ -294,9 +297,9 @@ function renderAt(t) {
 (async () => {
   [prologue, wall, guilin, shanghai, dawn] = await Promise.all([
     SCENES.prologue({ wipe: false }),
-    SCENES.place('wall', { duration: GUILIN - WALL }),
-    SCENES.place('guilin', { duration: SHANGHAI - GUILIN }),
-    SCENES.place('shanghai', { duration: DAWN - SHANGHAI }),
+    DH.location.make('wall', { duration: GUILIN - WALL }),
+    DH.location.make('guilin', { duration: SHANGHAI - GUILIN }),
+    DH.location.make('shanghai', { duration: DAWN - SHANGHAI }),
     SCENES.dawn({ times: FINALE }),
   ]);
   document.getElementById('paper').getContext('2d').drawImage(W.paperSheet(1920, 1080), 0, 0);
