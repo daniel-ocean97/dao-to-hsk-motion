@@ -442,7 +442,13 @@
       bunches(NEAR, cam, 1.6, t, 1);
     }
     // the crest for the cuts: the hills with the pagoda standing on them
-    return { frame, ridge: k.skylineOf('mid') };
+    const sky = k.skylineOf('mid').pts;
+    const crestLine = mid.map(([x, y]) => {
+      let top = Math.min(y, HZ);
+      if (Math.abs(x - PX) < 140) for (const [sx, sy] of sky) if (Math.abs(sx - x) < 5 && sy < top) top = sy;
+      return [x, top];
+    });
+    return { frame, ridge: { pts: crestLine, p: 0.35 } };
   }
 
   DH.location.define('xihu', {
