@@ -1,13 +1,11 @@
 // West Lake, Hangzhou (西湖) at dawn: the Leifeng pagoda on its hill across the water, seen
-// through a curtain of willow twigs that the camera leaves behind; the low sun, warm light
+// through a curtain of willow twigs that the camera leaves behind; warm morning light
 // on the water, lotus by the near bank, a covered boat. Slot: day.
-// WORK IN PROGRESS (skill `location`, stage 3): the willow curtain, the pagoda and the dawn
-// light are painted for real; the lotus and the boat are still sketches.
 // Probe: videos/probe-places/?place=xihu
 (function () {
   const HZ = 700; // the far shore of the lake
   const PX = 1100; // the pagoda
-  const SUN = [1400, HZ - 74];
+  const GLOW = [1420, HZ - 30]; // where the morning light comes from (the sun itself is not in the frame)
 
   function setup(k) {
     const { W, D, out, LX, LY, LW, LAYERS, DURATION, INK, INK2, view, show, mist, range, caption, camera } = k;
@@ -136,44 +134,135 @@
       for (let i = 0; i < 4; i++) dryStroke(c, pts.map(([a, b], j) => [a, b + (i - 1.5) * w0 * 0.17 + Math.sin(j + i) * 1.5]), 1.6, INK, { alpha: 0.45, hairs: 1, dry: 0.7, seed: seed + i });
     }
 
-    // ---------- sketches still: lotus, boat ----------
+    // ---------- lotus ----------
 
-    function lotus(c, x0, x1, y0, y1, n, s, seed) {
-      const q = rng(seed), items = [];
-      for (let i = 0; i < n; i++) items.push([x0 + q() * (x1 - x0), y0 + Math.pow(q(), 0.8) * (y1 - y0), q(), q()]);
-      items.sort((a, b) => a[1] - b[1]);
-      for (const [x, y, a, b] of items) {
-        const d = s * (0.6 + 0.6 * (y - y0) / (y1 - y0 || 1)), rx = (46 + 34 * a) * d;
-        if (b < 0.16) {
-          const top = y - (90 + 60 * a) * d;
-          c.strokeStyle = rgba('#56655a', 0.8); c.lineWidth = 3 * d;
-          c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 8 * d, (y + top) / 2, x, top); c.stroke();
-          for (const r of [-0.5, 0.5, -0.2, 0.2, 0]) {
-            c.fillStyle = rgba(r === 0 ? '#efd3c9' : '#d9a9a3', 0.85);
-            c.save(); c.translate(x, top); c.rotate(r);
-            c.beginPath(); c.ellipse(0, -18 * d, 9 * d, 22 * d, 0, 0, Math.PI * 2); c.fill(); c.restore();
-          }
-          continue;
-        }
-        const lift = b > 0.8 ? (40 + 50 * a) * d : 0;
-        if (lift) { c.strokeStyle = rgba('#56655a', 0.8); c.lineWidth = 3 * d; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 4 * d, y - lift); c.stroke(); }
-        c.fillStyle = rgba(a < 0.5 ? '#6f7d68' : '#566452', 0.9);
-        c.beginPath(); c.ellipse(x, y - lift, rx, rx * (lift ? 0.42 : 0.3), (a - 0.5) * 0.2, 0, Math.PI * 2); c.fill();
-        c.fillStyle = rgba('#38443a', 0.45);
-        c.beginPath(); c.ellipse(x + rx * 0.1, y - lift + rx * 0.04, rx * 0.5, rx * 0.12, 0, 0, Math.PI * 2); c.fill();
+    // A lotus leaf: a round blade with a wavy rim and a notch, seen at a low angle; veins
+    // run from the middle to the rim; the far rim catches the morning light, the near
+    // half is deeper. A lifted leaf stands on a stem and shows more of its face.
+    function leaf(c, x, y, rx, q, lifted) {
+      const ry = rx * (lifted ? 0.42 : 0.27), ph = q() * 6.28, notch = q() * 6.28, rot = (q() - 0.5) * (lifted ? 0.5 : 0.12);
+      const rim = [];
+      for (let i = 0; i < 40; i++) {
+        const a = i / 40 * Math.PI * 2, dn = Math.abs(Math.atan2(Math.sin(a - notch), Math.cos(a - notch)));
+        const r = (1 + 0.05 * Math.sin(5 * a + ph) + 0.03 * Math.sin(11 * a + ph * 2)) * (dn < 0.11 ? 0.35 + dn * 6 : 1);
+        const px = Math.cos(a) * rx * r, py = Math.sin(a) * ry * r;
+        rim.push([x + px * Math.cos(rot) - py * Math.sin(rot), y + px * Math.sin(rot) + py * Math.cos(rot)]);
       }
+      if (lifted) {
+        c.strokeStyle = rgba('#4f5c4c', 0.85); c.lineWidth = Math.max(2, rx * 0.05);
+        c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + rx * 0.12, y + lifted * 0.5, x - rx * 0.05, y + lifted); c.stroke();
+      }
+      const tone = q();
+      c.fillStyle = rgba(tone < 0.5 ? '#6b7a64' : '#5a6a57', 0.94);
+      fillPoly(c, rim);
+      c.save();
+      c.beginPath(); rim.forEach(([a, b], i) => (i ? c.lineTo(a, b) : c.moveTo(a, b))); c.clip();
+      wash(c, rim.map(([a, b]) => [a, b + ry * 0.75, 0.25]), '#34423a', { layers: 5, alpha: 0.09, seed: Math.floor(q() * 1e4) });
+      wash(c, rim.map(([a, b]) => [a, b - ry * 1.25, 0.25]), '#c9bb8a', { layers: 5, alpha: 0.08, seed: Math.floor(q() * 1e4) });
+      c.strokeStyle = rgba('#2f3b32', 0.3); c.lineWidth = Math.max(0.8, rx * 0.012);
+      for (let i = 0; i < 14; i++) { const p2 = rim[Math.floor((i + 0.5) / 14 * 40)]; c.beginPath(); c.moveTo(x, y); c.lineTo(p2[0], p2[1]); c.stroke(); }
+      c.restore();
+      c.fillStyle = rgba('#2f3b32', 0.5);
+      c.beginPath(); c.ellipse(x, y, rx * 0.05, ry * 0.07, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = rgba('#2a332c', 0.45); c.lineWidth = 1.2;
+      c.beginPath(); rim.slice(2, 19).forEach(([a, b], i) => (i ? c.lineTo(a, b) : c.moveTo(a, b))); c.stroke(); // the near rim
     }
+    // One petal from its base, pointing along angle a (0 is up).
+    function petal(c, x, y, a, len, wid, col, alpha) {
+      c.save(); c.translate(x, y); c.rotate(a);
+      const g = c.createLinearGradient(0, 0, 0, -len);
+      g.addColorStop(0, rgba('#f6e6dc', alpha)); g.addColorStop(1, rgba(col, alpha));
+      c.fillStyle = g;
+      c.beginPath(); c.moveTo(0, 0); c.bezierCurveTo(wid, -len * 0.25, wid * 0.9, -len * 0.75, 0, -len); c.bezierCurveTo(-wid * 0.9, -len * 0.75, -wid, -len * 0.25, 0, 0); c.fill();
+      c.strokeStyle = rgba('#9c5f66', 0.35 * alpha); c.lineWidth = 1; c.stroke();
+      c.restore();
+    }
+    // A lotus flower or bud on its stem, on its own canvas so it can sway about its foot.
+    // open: 0 a bud, 1 a full flower.
+    function flower(hh, s, open, seed) {
+      const w = Math.ceil(150 * s), h = Math.ceil(hh + 90 * s), c = W.canvas(w, h), x = c.getContext('2d'), q = rng(seed);
+      const fx = w / 2, fy = h - 2, tx = fx + (q() - 0.5) * 16 * s, ty = 78 * s;
+      x.strokeStyle = rgba('#4f5c4c', 0.9); x.lineWidth = 3.2 * s;
+      x.beginPath(); x.moveTo(fx, fy); x.quadraticCurveTo(fx + (q() - 0.5) * 30 * s, (fy + ty) / 2, tx, ty); x.stroke();
+      const len = (46 + 14 * q()) * s, pink = ['#d79aa0', '#e3b1b0', '#cf8c95'];
+      if (open < 0.3) {
+        for (const a of [-0.22, 0.22, 0]) petal(x, tx, ty, a, len * 0.95, len * 0.24, pink[0], 0.95);
+      } else {
+        for (const a of [-1.25, 1.25, -0.9, 0.9]) petal(x, tx, ty, a * open, len * 0.9, len * 0.3, pink[1], 0.9);
+        x.fillStyle = rgba('#c9a46a', 0.95);
+        x.beginPath(); x.ellipse(tx, ty - len * 0.2, len * 0.16, len * 0.12, 0, 0, Math.PI * 2); x.fill();
+        for (const a of [-0.55, 0.55, -0.28, 0.28, 0]) petal(x, tx, ty, a * open, len * (1 - Math.abs(a) * 0.15), len * 0.3, pink[Math.abs(a) < 0.1 ? 2 : 0], 0.93);
+      }
+      return { c, ax: fx, ay: fy };
+    }
+
+    // ---------- the boat ----------
+
+    // A covered West Lake rowing boat, painted like the hull washes of the other places:
+    // a long hull with lifted ends, a cloth roof on four thin posts, a passenger under it,
+    // the boatman standing at the stern with a long sculling oar. Returns the oar tip.
     function boat(c, x, y, s) {
-      c.fillStyle = rgba('#3b2f26', 0.9);
-      fillPoly(c, [[x - 80 * s, y - 10 * s], [x - 60 * s, y + 6 * s], [x + 60 * s, y + 6 * s], [x + 86 * s, y - 14 * s], [x + 60 * s, y - 4 * s], [x - 60 * s, y - 4 * s]]);
-      c.fillStyle = rgba('#9a7f5f', 0.9);
-      c.fillRect(x - 46 * s, y - 30 * s, 70 * s, 5 * s);
-      c.fillStyle = rgba('#3b2f26', 0.8);
-      for (const o of [-44, -12, 20]) c.fillRect(x + o * s, y - 26 * s, 2.5 * s, 22 * s);
-      fillPoly(c, taper([[x + 48 * s, y - 6 * s], [x + 50 * s, y - 34 * s]], () => 8 * s));
-      c.beginPath(); c.arc(x + 50 * s, y - 40 * s, 5 * s, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = rgba('#3b2f26', 0.8); c.lineWidth = 2 * s;
-      c.beginPath(); c.moveTo(x + 52 * s, y - 24 * s); c.lineTo(x + 96 * s, y + 14 * s); c.stroke();
+      const r = rng(700), L = 250 * s, H = 17 * s;
+      const sheer = (u) => Math.pow(Math.abs(u * 2 - 1), 2.6) * 20 * s + (u > 0.5 ? (u - 0.5) * 8 * s : 0);
+      const top = [], bot = [];
+      for (let i = 0; i <= 26; i++) {
+        const u = i / 26, px = x - L / 2 + u * L;
+        top.push([px, y - sheer(u) + (r() - 0.5) * s]);
+        bot.push([px, y - sheer(u) * 0.7 + H * Math.pow(Math.sin(u * Math.PI), 0.7)]);
+      }
+      const hull = [...top, ...bot.slice().reverse()].map(([a, b]) => [a, b, 0.04]);
+      // its soft reflection first
+      const wl = y + H;
+      c.save(); c.filter = `blur(${3 * s}px)`; c.fillStyle = rgba('#3b2f33', 0.16);
+      fillPoly(c, hull.map(([a, b]) => [a, 2 * wl - b - 2 * s]));
+      c.restore();
+      c.fillStyle = rgba('#a48d76', 0.9);
+      fillPoly(c, hull);
+      wash(c, hull, '#6a5140', { layers: 12, alpha: 0.09, seed: 701 });
+      wash(c, [...top.map(([a, b], i) => [a, b + (bot[i][1] - b) * 0.5, 0.05]), ...bot.slice().reverse().map(([a, b]) => [a, b, 0.05])], '#35282a', { layers: 9, alpha: 0.09, seed: 702 });
+      dryStroke(c, top, 2.6 * s, INK, { alpha: 0.75, hairs: 2, dry: 0.3, seed: 703 });
+      dryStroke(c, bot, 1.5 * s, INK, { alpha: 0.35, hairs: 1, dry: 0.55, seed: 704 });
+      for (let i = 0; i < 3; i++) dryStroke(c, top.slice(3, 24).map(([a, b], j) => [a, b + (bot[j + 3][1] - b) * (0.3 + 0.22 * i)]), 1.1 * s, INK, { alpha: 0.22, hairs: 1, dry: 0.7, seed: 705 + i });
+      // the passenger under the roof
+      const px = x - L * 0.1, py = y - 3 * s;
+      c.fillStyle = rgba('#3a3038', 0.8);
+      fillPoly(c, taper([[px - 3 * s, py], [px, py - 14 * s], [px + 2 * s, py - 24 * s]], (u) => (15 - 6 * u) * s));
+      c.beginPath(); c.arc(px + 3 * s, py - 29 * s, 5 * s, 0, Math.PI * 2); c.fill();
+      // posts, a little out of true, and the cloth roof sagging between them
+      const x0 = x - L * 0.3, x1 = x + L * 0.14, ry = y - 50 * s;
+      for (const [qx, lean] of [[x0, -2], [x0 + (x1 - x0) * 0.36, 1], [x0 + (x1 - x0) * 0.68, -1], [x1, 2]]) {
+        c.fillStyle = rgba('#3b2c24', 0.9);
+        fillPoly(c, taper([[qx, y - 2 * s], [qx + lean * s * 0.5, y - 26 * s], [qx + lean * s, ry + 6 * s]], () => 3 * s));
+      }
+      const roofTop = [], roofBot = [];
+      for (let i = 0; i <= 16; i++) {
+        const u = i / 16, qx = x0 - 14 * s + u * (x1 - x0 + 28 * s);
+        roofTop.push([qx, ry - Math.sin(u * Math.PI) * 9 * s + (r() - 0.5) * s]);
+        roofBot.push([qx, ry + 6 * s - Math.sin(u * Math.PI) * 4 * s + Math.sin(u * 19) * 1.4 * s]);
+      }
+      const roof = [...roofTop, ...roofBot.slice().reverse()].map(([a, b]) => [a, b, 0.05]);
+      c.fillStyle = rgba('#d2c0a0', 0.92);
+      fillPoly(c, roof);
+      wash(c, roof, '#8e7650', { layers: 10, alpha: 0.08, seed: 710 });
+      wash(c, roof.map(([a, b, v]) => [a - 30 * s, b + 4 * s, v]), '#5d4a3a', { layers: 6, alpha: 0.07, seed: 711 });
+      dryStroke(c, roofTop, 2 * s, INK, { alpha: 0.7, hairs: 2, dry: 0.3, seed: 712 });
+      dryStroke(c, roofBot, 1.3 * s, INK, { alpha: 0.45, hairs: 1, dry: 0.5, seed: 713 });
+      // the boatman: he leans on the oar, one leg forward; a straw hat
+      const bx = x + L * 0.33, byy = y - sheer(0.83) * 0.5 - 2 * s;
+      c.fillStyle = rgba('#2a2420', 0.9);
+      fillPoly(c, taper([[bx - 7 * s, byy], [bx - 3 * s, byy - 14 * s], [bx + 1 * s, byy - 22 * s]], (u) => (6 - 1 * u) * s));
+      fillPoly(c, taper([[bx + 6 * s, byy], [bx + 3 * s, byy - 14 * s], [bx + 1 * s, byy - 22 * s]], (u) => (6 - 1 * u) * s));
+      fillPoly(c, taper([[bx + 1 * s, byy - 20 * s], [bx + 5 * s, byy - 32 * s], [bx + 11 * s, byy - 42 * s]], (u) => (12 - 3 * u) * s));
+      c.beginPath(); c.arc(bx + 13 * s, byy - 47 * s, 4.6 * s, 0, Math.PI * 2); c.fill();
+      fillPoly(c, taper([[bx + 9 * s, byy - 38 * s], [bx + 20 * s, byy - 31 * s], [bx + 29 * s, byy - 27 * s]], (u) => (4.5 - 1.5 * u) * s));
+      const hat = [[bx - 2 * s, byy - 49 * s, 0.05], [bx + 13 * s, byy - 58 * s, 0.03], [bx + 28 * s, byy - 48 * s, 0.05], [bx + 13 * s, byy - 46 * s, 0.05]];
+      c.fillStyle = rgba('#d8c59a', 0.9);
+      fillPoly(c, hat);
+      wash(c, hat, '#a38652', { layers: 7, alpha: 0.1, seed: 720 });
+      dryStroke(c, hat.slice(0, 3), 1.6 * s, INK, { alpha: 0.7, hairs: 1, dry: 0.2, seed: 721 });
+      const tip = [bx + 78 * s, y + 30 * s];
+      dryStroke(c, [[bx + 18 * s, byy - 38 * s], [bx + 44 * s, byy - 6 * s], tip], 2.6 * s, INK, { alpha: 0.85, hairs: 1, dry: 0.15, seed: 722 });
+      return tip;
     }
 
     // ---------- the place ----------
@@ -188,12 +277,11 @@
       g.addColorStop(0, '#f1ede8'); g.addColorStop(0.45, '#f3e3e5'); g.addColorStop(0.8, '#f6dcc8'); g.addColorStop(1, '#f7d3b0');
       ctx.fillStyle = g;
       ctx.fillRect(LX, LY, LW, 1300);
-      const glow = ctx.createRadialGradient(SUN[0], SUN[1], 20, SUN[0], SUN[1], 620);
-      glow.addColorStop(0, rgba('#fbe2b8', 0.75)); glow.addColorStop(0.4, rgba('#f7cf92', 0.25)); glow.addColorStop(1, rgba('#f7cf92', 0));
+      const glow = ctx.createRadialGradient(GLOW[0], GLOW[1], 20, GLOW[0], GLOW[1], 760);
+      glow.addColorStop(0, rgba('#fdebc8', 0.7)); glow.addColorStop(0.35, rgba('#f7cf92', 0.26)); glow.addColorStop(1, rgba('#f7cf92', 0));
       ctx.fillStyle = glow;
       ctx.fillRect(LX, LY, LW, 1300);
     }
-    const SUNC = W.sun({ x: SUN[0], y: SUN[1], rad: 44, seed: 9 });
     begin('far', 0.15); paintHills(far, '#cfc0c6', '#b5a4b2', '#f4e2d6', 32);
     begin('mid', 0.35);
     paintHills(mid, '#948c98', '#6b6475', '#efdccf', 34);
@@ -204,11 +292,10 @@
       ctx.drawImage(pagodaSprite(250, 1), PX - 100, fy + 16 - 260);
       ctx.filter = 'none';
       for (let i = 0; i < 60; i++) {
-        const x = PX + q.gauss() * 85, y = yAt(mid, x) + 4 + q() * 10, r = 7 + q() * 10;
-        for (let j = 0; j < 3; j++) {
-          ctx.fillStyle = rgba(['#4f584f', '#646a5c', '#6f6872'][Math.floor(q() * 3)], 0.4 + 0.3 * q());
-          ctx.beginPath(); ctx.ellipse(x + (q() - 0.5) * r, y - j * r * 0.45, r * (1 - j * 0.22), r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-        }
+        const x = PX + q.gauss() * 90, y = yAt(mid, x) + 6 + q() * 8, r = 9 + q() * 13, crown = [];
+        for (let j = 0; j < 9; j++) { const a = j / 9 * Math.PI * 2; crown.push([x + Math.cos(a) * r * (0.8 + 0.4 * q()), y - r * 0.5 + Math.sin(a) * r * 0.75 * (0.8 + 0.4 * q()), 0.3]); }
+        wash(ctx, crown, ['#4f584f', '#5e6656', '#6f6872'][Math.floor(q() * 3)], { layers: 5, alpha: 0.11, seed: 300 + i });
+        wash(ctx, crown.map(([a, b, v]) => [a + r * 0.15, b + r * 0.35, v]), '#343d38', { layers: 3, alpha: 0.08, seed: 400 + i });
       }
     }
     // the mirror image of the hills and the pagoda, at their depth
@@ -222,7 +309,7 @@
     // the water takes the colours of the sky: warm by the far shore, grey lilac near us
     begin('water', 0.5);
     wash(ctx, [[-240, HZ, 0.01], [2160, HZ, 0.01], [2160, 1190, 0.05], [-240, 1190, 0.05]], '#b3b1c2', { layers: 14, alpha: 0.07, seed: 7 });
-    wash(ctx, k.densify([[-240, HZ], [2160, HZ], [2160, HZ + 250], [-240, HZ + 230]], 30).map(([x, y]) => [x, y, y > HZ + 10 ? 0.5 : 0.02]), '#f3c9a8', { layers: 10, alpha: 0.07, seed: 8 });
+    wash(ctx, k.densify([[-240, HZ], [2160, HZ], [2160, HZ + 250], [-240, HZ + 230]], 30).map(([x, y]) => [x, y, y > HZ + 10 ? 0.25 : 0.02]), '#f3c9a8', { layers: 10, alpha: 0.07, seed: 8 });
     {
       const q = rng(9);
       ctx.globalCompositeOperation = 'destination-out';
@@ -232,13 +319,30 @@
       }
       ctx.globalCompositeOperation = 'source-over';
     }
-    begin('lotus', 1); lotus(ctx, -240, 2160, 930, 1160, 80, 1.2, 36);
-    const BOAT = W.canvas(240, 120); boat(BOAT.getContext('2d'), 120, 70, 1);
+    // the lotus by the near bank: small far leaves first, big ones by the lens; a few
+    // flowers and buds stand on their own stems and sway
+    begin('lotus', 1);
+    const FLOWERS = [];
+    {
+      const q = rng(36), items = [];
+      for (let i = 0; i < 95; i++) { const v = Math.pow(q(), 0.75); items.push([-240 + q() * 2400, 890 + v * 280, v]); }
+      items.sort((a, b) => a[1] - b[1]);
+      for (const [x, y, v] of items) {
+        const rx = (34 + 62 * v) * (0.8 + 0.5 * q()), up = q() < 0.2 && v > 0.25, lift = up ? (50 + 60 * q()) * (0.5 + v) : 0;
+        leaf(ctx, x, y - lift, rx, q, lift);
+      }
+      for (let i = 0; i < 9; i++) {
+        const v = 0.35 + 0.65 * q(), s = 0.7 + 0.8 * v;
+        FLOWERS.push({ ...flower((60 + 70 * q()) * s, s, q() < 0.35 ? 0 : 0.7 + 0.3 * q(), 500 + i), x: -180 + (i + q() * 0.8) * 250, y: 960 + v * 200, ph: q() * 6.28 });
+      }
+      FLOWERS.sort((a, b) => a.y - b.y);
+    }
+    const BOAT = W.canvas(460, 220), TIP = boat(BOAT.getContext('2d'), 210, 120, 1.25);
     const FLOCK = D.flock({ n: 5, seed: 31, spread: [70, 24], size: 8 });
 
     // sparks of the sun on the water: short streaks in a path that widens towards us
     const SPARKS = [];
-    { const q = rng(41); for (let i = 0; i < 46; i++) { const v = Math.pow(q(), 1.4); SPARKS.push({ v, dx: (q() - 0.5) * (40 + 230 * v), len: 14 + 70 * v * q() + 10 * q(), ph: q() * 6.28, sp: 2 + q() * 3, warm: q() < 0.7 }); } }
+    { const q = rng(41); for (let i = 0; i < 60; i++) { const v = Math.pow(q(), 1.4); SPARKS.push({ v, dx: (q() - 0.5) * (120 + 420 * v), len: 14 + 70 * v * q() + 10 * q(), ph: q() * 6.28, sp: 2 + q() * 3, warm: q() < 0.7 }); } }
 
     // the willow: a limb across the top of the frame, bunches of twigs off it (near), and a
     // paler row of bunches behind them (far)
@@ -257,11 +361,11 @@
       const q = rng(60);
       for (let i = 0; i < 17; i++) {
         const u = 0.04 + 0.94 * (i + q() * 0.6) / 17, [x, y] = limbAt(u), edge = Math.min(1, (1 - u) * 3 + 0.35);
-        NEAR.push({ ...bunch(61 + i, { len: (380 + 300 * q()) * edge, n: 6 + Math.floor(q() * 4), s: 1.15, tone: q() * 0.4 }), x: x + (q() - 0.5) * 30, y: y + 6, ph: x / 260, amp: 0.022 + 0.014 * q() });
+        NEAR.push({ ...bunch(61 + i, { len: (300 + 400 * q()) * edge, n: 4 + Math.floor(q() * 7), s: 1.15, tone: q() * 0.4, spread: 40 + 120 * q() }), x: x + (q() - 0.5) * 30, y: y + 6, ph: x / 260, amp: 0.022 + 0.014 * q() });
       }
       for (let i = 0; i < 15; i++) {
         const x = -420 + 1340 * (i + q() * 0.7) / 15, edge = Math.min(1, (920 - x) / 400 + 0.3);
-        FARB.push({ ...bunch(81 + i, { len: (330 + 280 * q()) * edge, n: 5 + Math.floor(q() * 4), s: 0.8, tone: 0.8 + q() * 0.4, spread: 110 }), x, y: -40 - q() * 60, ph: x / 260 + 1, amp: 0.016 + 0.012 * q() });
+        FARB.push({ ...bunch(81 + i, { len: (260 + 360 * q()) * edge, n: 3 + Math.floor(q() * 6), s: 0.8, tone: 0.8 + q() * 0.4, spread: 50 + 120 * q() }), x, y: -40 - q() * 60, ph: x / 260 + 1, amp: 0.016 + 0.012 * q() });
       }
     }
     function bunches(list, cam, p, t, alpha) {
@@ -284,8 +388,6 @@
     function frame(t) {
       const cam = camera(t);
       show('sky', cam);
-      view(cam, 0.1);
-      out.drawImage(SUNC.canvas, SUNC.ox, SUNC.oy - t * 5);
       show('far', cam);
       view(cam, 0.2); D.birds(out, FLOCK, 760 + 40 * t, 380 - 6 * t, t, { color: INK2, alpha: 0.4 });
       caption(cam, t);
@@ -300,9 +402,9 @@
           out.drawImage(R.c, 0, y, LW, 3, 0, 0, LW, 3);
         }
       }
-      // sparks under the sun (the sun is at depth 0.1, the water at 0.5: keep them in line)
+      // sparks under the glow of the sky (the sky is far, the water nearer: keep them in line)
       {
-        const z5 = view(cam, 0.5), z1 = 1 + (cam.zoom - 1) * 0.1, sx = 960 + cam.x * 0.5 + (z1 / z5) * (SUN[0] - 960 - cam.x * 0.1);
+        const z5 = view(cam, 0.5), z1 = 1 + (cam.zoom - 1) * 0.1, sx = 960 + cam.x * 0.5 + (z1 / z5) * (GLOW[0] - 960 - cam.x * 0.1);
         for (const s of SPARKS) {
           const a = 0.3 + 0.5 * Math.max(0, Math.sin(t * s.sp + s.ph));
           out.fillStyle = rgba(s.warm ? '#fbe2b8' : '#f8efe2', a * (0.55 + 0.45 * (1 - s.v)));
@@ -310,15 +412,37 @@
         }
       }
       show('mist', cam, 1, (t * 12) % 200);
+      // the boat rows to the left, bobbing; rings spread where the oar works
       view(cam, 0.8);
-      out.drawImage(BOAT, 1500 - t * 30 - 120, 790 - 70 + Math.sin(t * 2) * 1.2);
+      {
+        const bx = 1560 - t * 34, by = 800 + Math.sin(t * 2) * 1.4;
+        out.strokeStyle = '#6d6a7c'; out.lineWidth = 1.3;
+        for (let i = 0; i < 3; i++) {
+          const a = (t / 0.9 + i / 3) % 1;
+          out.globalAlpha = 0.4 * (1 - a);
+          out.beginPath(); out.ellipse(bx - 210 + TIP[0], 800 - 120 + TIP[1], 8 + 58 * a, 2 + 12 * a, 0, 0, Math.PI * 2); out.stroke();
+        }
+        out.globalAlpha = 1;
+        out.drawImage(BOAT, bx - 210, by - 120);
+      }
+      view(cam, 0.9);
+      D.ring(out, 700, 880, t - 0.9, { size: 40, alpha: 0.3, color: '#6d6a7c' });
       show('lotus', cam);
+      view(cam, 1);
+      const base = out.getTransform();
+      for (const F of FLOWERS) {
+        out.setTransform(base);
+        out.translate(F.x, F.y);
+        out.rotate(Math.sin(t * 1.3 + F.ph) * 0.035);
+        out.drawImage(F.c, -F.ax, -F.ay);
+      }
       bunches(FARB, cam, 1.3, t, 0.9);
       view(cam, 1.6);
       out.drawImage(LIMB, -520, -120);
       bunches(NEAR, cam, 1.6, t, 1);
     }
-    return { frame, ridge: { pts: mid, p: 0.35 } };
+    // the crest for the cuts: the hills with the pagoda standing on them
+    return { frame, ridge: k.skylineOf('mid') };
   }
 
   DH.location.define('xihu', {
