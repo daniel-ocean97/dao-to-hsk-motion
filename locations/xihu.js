@@ -212,9 +212,9 @@
       }
       const hull = [...top, ...bot.slice().reverse()].map(([a, b]) => [a, b, 0.04]);
       // its soft reflection first
-      const wl = y + H;
-      c.save(); c.filter = `blur(${3 * s}px)`; c.fillStyle = rgba('#3b2f33', 0.16);
-      fillPoly(c, hull.map(([a, b]) => [a, 2 * wl - b - 2 * s]));
+      const wl = y + H * 0.8;
+      c.save(); c.filter = `blur(${1.6 * s}px)`; c.fillStyle = rgba('#3b2f33', 0.22);
+      fillPoly(c, hull.map(([a, b]) => [a, wl + (wl - b) * 0.8]));
       c.restore();
       c.fillStyle = rgba('#a48d76', 0.9);
       fillPoly(c, hull);
