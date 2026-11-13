@@ -69,6 +69,7 @@
 |---|---|---|---|---|
 | `wall` | Великая стена | 长城 Chángchéng | день | `locations/wall.js` |
 | `guilin` | Гуйлинь, река Лицзян | 桂林 Guìlín | день | `locations/guilin.js` |
+| `huangshan` | Хуаншань, сосна над морем облаков | 黄山 Huángshān | день | `locations/huangshan.js` |
 | `shanghai` | Шанхай, Пудун ночью | 上海 Shànghǎi | ночь | `locations/shanghai.js` |
 
 ## Каталог и сборка
